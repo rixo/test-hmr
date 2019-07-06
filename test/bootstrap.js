@@ -1,6 +1,10 @@
-const path = require('path')
+/* eslint-env mocha */
+/* globals browser */
 
 const { expect } = require('chai')
+const puppeteer = require('puppeteer')
+
+const { startWebpack } = require('../app/test-utils')
 
 const { DEBUG } = process.env
 
@@ -24,53 +28,71 @@ const restoreGlobals = () => {
   })
 }
 
-const startPuppeteer = () => {
-  const puppeteer = require('puppeteer')
-
+const startPuppeteer = async () => {
   // puppeteer options
   const opts = DEBUG
     ? {
         headless: false,
-        slowMo: 100,
+        // slowMo: 200,
         timeout: 10000,
+        devtools: true,
       }
     : {}
-
-  // expose variables
-  before(async function() {
-    const browser = await puppeteer.launch(opts)
-    setGlobals({ expect, browser, baseUrl })
-  })
-
-  // close browser and reset global variables
-  after(async function() {
-    await browser.close()
-    restoreGlobals()
-  })
+  return await puppeteer.launch(opts)
 }
 
-const startWebpack = () => {
-  const webpack = require('../app/node_modules/webpack')
-  const WebpackDevServer = require('../app/node_modules/webpack-dev-server')
-  const config = require('../app/webpack.config.js')
-  const compiler = webpack(config)
-  const server = new WebpackDevServer(compiler, {
-    contentBase: path.join(__dirname, '..', 'app', 'public'),
-    public: 'http://localhost:8080',
-    publicPath: '/'
+let closeWebpack
+
+// before(async () => {
+//   const [close, browser] = await Promise.all([startWebpack(), startPuppeteer()])
+//   if (close) {
+//     closeWebpack = () => {
+//       closeWebpack = null
+//       return close().catch(err => {
+//         // eslint-disable-next-line no-console
+//         console.warn('Failed to close webpack dev server', err)
+//       })
+//     }
+//   }
+//   setGlobals({ baseUrl, expect, browser })
+// })
+//
+// after(async () => {
+//   const ops = [browser.close()]
+//   if (closeWebpack) {
+//     ops.push(closeWebpack())
+//   }
+//   await Promise.all(ops)
+//   if (closeWebpack) {
+//     restoreGlobals()
+//   }
+// })
+before(async () => {
+  const browser = await startPuppeteer()
+  setGlobals({ baseUrl, expect, browser })
+})
+
+after(async () => {
+  await browser.close()
+  restoreGlobals()
+})
+
+{
+  let rc
+  before(async () => {
+    rc = await startWebpack()
   })
-
-  before(() => new Promise((resolve, reject) => {
-    server.listen(PORT, HOST, function(err) {
-      if (err) reject(err)
-      else resolve()
-    })
-  }))
-
   after(() => {
-    server.close()
+    if (rc) {
+      return rc.close().catch(err => {
+        // eslint-disable-next-line no-console
+        console.warn('Failed to close webpack dev server', err)
+      })
+    }
+  })
+  beforeEach(async () => {
+    // eslint-disable-next-line no-unused-expressions
+    expect(rc).not.to.be.undefined
+    await rc.reset()
   })
 }
-
-startWebpack()
-startPuppeteer()

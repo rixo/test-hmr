@@ -1,5 +1,7 @@
 /* eslint-env node, mocha */
 
+const APP = __dirname
+
 const PORT = 8080
 const HOST = 'localhost'
 const PROTOCOL = 'http'
@@ -11,19 +13,19 @@ const webpack = require('webpack')
 const WebpackDevServer = require('webpack-dev-server')
 const MemoryFS = require('memory-fs')
 
-const config = require('./webpack.config.js')
-const compiler = webpack(config)
+const { Union } = require('unionfs')
+// const { link } = require('linkfs')
+
+const config = require(`${APP}/webpack.config.js`)
 
 // --- Mem fs ---
 
 let notify
 
-const mfs = new MemoryFS()
-
 const inSrc = file =>
-  file ? path.join(__dirname, 'src', file) : path.join(__dirname, 'src')
+  file ? path.join(APP, 'src', file) : path.join(APP, 'src')
 
-mfs.mkdirpSync(inSrc())
+// mfs.mkdirpSync(inSrc())
 // mfs.writeFileSync(
 //   inSrc('main.js'),
 //   fs.readFileSync(inSrc('main.js'), 'utf8'),
@@ -40,13 +42,12 @@ mfs.mkdirpSync(inSrc())
 //   const file = inSrc('App.svelte')
 //   mfs.writeFileSync(file, 'BIM !')
 //   notify([file])
-//   // console.log(ufs.readFileSync(__dirname + '/src/App.svelte', 'utf8'))
+//   // console.log(ufs.readFileSync(APP + '/src/App.svelte', 'utf8'))
 //   // console.log(server, compiler)
 //   // debugger
 // }, 5000)
 
-const { Union } = require('unionfs')
-// const { link } = require('linkfs')
+const mfs = new MemoryFS()
 
 const ufs = new Union().use(fs).use(mfs)
 
@@ -127,12 +128,7 @@ ufs._writeVirtualFile = (file, stats, contents) => {
   times[file] = stats.mtime
 }
 
-compiler.inputFileSystem = ufs
-compiler.outputFileSystem = mfs
-compiler.watchFileSystem = mfs
-// compiler.watchFileSystem = fs // DEBUG DEBUG DEBUG ;
-
-// console.log(ufs.readFileSync(__dirname + '/src/App.svelte', 'utf8'))
+// console.log(ufs.readFileSync(APP + '/src/App.svelte', 'utf8'))
 
 // --- End of compile hook ---
 
@@ -177,7 +173,7 @@ const before = app => {
 
   router.post('/_dev/reset', (req, res) => {
     const rimraf = require('rimraf')
-    rimraf(inSrc('**/*'), mfs, err => {
+    rimraf(inSrc('*'), mfs, err => {
       if (err) {
         res.status(500).json({
           error: String(err.stack)
@@ -209,9 +205,15 @@ const before = app => {
   app.use(router)
 }
 
+const compiler = webpack(config)
+compiler.inputFileSystem = ufs
+compiler.outputFileSystem = mfs
+compiler.watchFileSystem = mfs
+// compiler.watchFileSystem = fs // DEBUG DEBUG DEBUG ;
+
 const server = new WebpackDevServer(compiler, {
-  contentBase: path.join(__dirname, 'public'),
-  public: 'http://localhost:8080',
+  contentBase: path.join(APP, 'public'),
+  public: `${PROTOCOL}/${HOST}:${PORT}`,
   publicPath: '/',
   inline: true,
   hot: true,
@@ -222,19 +224,15 @@ const start = () =>
   new Promise((resolve, reject) => {
     server.listen(PORT, HOST, function(err) {
       if (err) reject(err)
-      else resolve()
+      else resolve(function close() {
+        return new Promise((resolve, reject) => {
+          server.close(err => {
+            if (err) reject(err)
+            else resolve()
+          })
+        })
+      })
     })
   })
 
 start()
-
-// before(() => new Promise((resolve, reject) => {
-//   server.listen(PORT, HOST, function(err) {
-//     if (err) reject(err)
-//     else resolve()
-//   })
-// }))
-//
-// after(() => {
-//   server.close()
-// })

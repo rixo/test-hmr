@@ -30,12 +30,12 @@ module.exports = {
         use: {
           loader: 'svelte-loader',
           options: {
-            emitCss: true,
+            emitCss: false,
             hotReload: true,
             hotOptions: {
               // will display compile error in the client, avoiding page
               // reload on error
-              optimistic: true,
+              optimistic: false,
             },
             dev,
           },

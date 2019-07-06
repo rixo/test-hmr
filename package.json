@@ -4,7 +4,8 @@
   "description": "Test suite for svelte HMR",
   "main": "index.js",
   "scripts": {
-    "test": "mocha test/bootstrap.js --recursive test"
+    "test": "mocha test/bootstrap.js --recursive --timeout 5000 --reporter mocha-unfunk-reporter test",
+    "test:debug": "mocha debug test/bootstrap.js --recursive test"
   },
   "author": "rixo <eric@rixo.fr>",
   "license": "MIT",
@@ -14,12 +15,17 @@
     "cypress": "^3.3.2",
     "dedent": "^0.7.0",
     "express": "^4.17.1",
+    "glob": "^7.1.4",
     "linkfs": "^2.1.0",
     "memfs": "^2.15.4",
     "memory-fs": "^0.4.1",
     "mocha": "^6.1.4",
+    "mocha-unfunk-reporter": "^0.4.0",
+    "node-fetch": "^2.6.0",
     "puppeteer": "^1.18.1",
-    "rimraf": "^2.6.3",
     "unionfs": "^4.1.0"
+  },
+  "devDependencies": {
+    "@rixo/eslint-config": "^0.7.0-alpha.7"
   }
 }

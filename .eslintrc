@@ -1,0 +1,15 @@
+extends:
+  - '@rixo'
+
+env:
+  node: true
+
+overrides:
+  - files: ["*.spec.js"]
+    env:
+      mocha: true
+    globals:
+      browser: true
+      baseUrl: true
+    rules:
+      no-unused-expressions: off
