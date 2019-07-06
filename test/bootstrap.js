@@ -56,20 +56,17 @@ const defaultResetHandler = () => {
   let closeWebpack
 
   before(async () => {
-    const [close, browser] = await Promise.all([
-      startWebpack(),
-      startPuppeteer(),
-    ])
-    if (close) {
+    const [rc, browser] = await Promise.all([startWebpack(), startPuppeteer()])
+    if (rc) {
       closeWebpack = () => {
         closeWebpack = null
-        return close().catch(err => {
+        return rc.close().catch(err => {
           // eslint-disable-next-line no-console
           console.warn('Failed to close webpack dev server', err)
         })
       }
     }
-    setGlobals({ baseUrl, expect, browser })
+    setGlobals({ baseUrl, expect, browser, rc })
   })
 
   after(async () => {
@@ -99,6 +96,7 @@ const fastResetHandler = () => {
     let rc
     before(async () => {
       rc = await startWebpack()
+      setGlobals({ baseUrl, expect, browser, rc })
     })
     after(() => {
       if (rc) {

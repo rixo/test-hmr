@@ -11,5 +11,7 @@ overrides:
     globals:
       browser: true
       baseUrl: true
+      rc: true
+      expect: true
     rules:
       no-unused-expressions: off
