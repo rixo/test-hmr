@@ -1,21 +1,18 @@
+// The watcher implementation is very largely inspired by:
+// https://github.com/webpack/webpack/issues/1562#issuecomment-354878322
+
 const fs = require('fs')
 
-const MemoryFS = require('memory-fs')
 const { Union } = require('unionfs')
 // const { link } = require('linkfs')
 
 const cacheFS = require('./cache-fs')
+const tmpMemFS = require('./tmp-mem-fs')
 
 const cached = cacheFS(fs)
 
 function VirtualFs({ srcDir }) {
-  let mfsTarget = new MemoryFS()
-  const mfs = new Proxy(mfsTarget, {
-    get(target, key) {
-      return mfsTarget[key]
-    },
-  })
-
+  const mfs = tmpMemFS({ srcDir })
   const ufs = new Union().use(cached).use(mfs)
 
   let notify
@@ -100,9 +97,9 @@ function VirtualFs({ srcDir }) {
   ufs.notify = (...args) => notify(...args)
 
   ufs.reset = async () => {
-    mfsTarget = new MemoryFS()
+    const changes = await mfs.nuke()
     if (notify) {
-      await notify([`${srcDir}/main.js`, `${srcDir}/App.svelte`])
+      await notify(changes)
     }
   }
 

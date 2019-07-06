@@ -72,6 +72,11 @@ const start = () =>
       },
     })
 
+    const reset = async () => {
+      await vfs.reset()
+      return onEmit()
+    }
+
     server.listen(PORT, HOST, function(err) {
       if (err) reject(err)
       else {
@@ -81,10 +86,7 @@ const start = () =>
         }
         resolve({
           close,
-          reset: () => {
-            vfs.reset()
-            return onEmit()
-          },
+          reset,
         })
       }
     })
