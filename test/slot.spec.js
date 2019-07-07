@@ -1,24 +1,14 @@
-const {
-  testHmr,
-  init,
-  templates,
-  change,
-  innerText,
-} = require('../test-utils/testHmr')
+const { testHmr, init, change, innerText } = require('../test-utils/testHmr')
 
 describe('HMR (slots)', () => {
   testHmr('updates default slot when parent changes', function*() {
-    yield templates({
-      'App.svelte': slot => `
+    yield init({
+      'App.svelte': (val = '<Child />') => `
         <script>
           import Child from './Child'
         </script>
-        ${slot}
+        ${val}
       `,
-    })
-
-    yield init({
-      'App.svelte': '<Child />',
       'Child.svelte': '<h2><slot>I am Child</slot></h2>',
     })
     expect(yield innerText('h2')).to.equal('I am Child')
@@ -30,10 +20,6 @@ describe('HMR (slots)', () => {
   })
 
   testHmr('updates default slot when child changes', function*() {
-    yield templates({
-      'Child.svelte': slot => `<h2>${slot}</h2>`,
-    })
-
     yield init({
       'App.svelte': `
         <script>
@@ -41,7 +27,9 @@ describe('HMR (slots)', () => {
         </script>
         <Child>I am Slot</Child>
       `,
-      'Child.svelte': '<slot>I am Child</slot>',
+      'Child.svelte': (val = '<slot>I am Child</slot>') => `
+        <h2>${val}</h2>
+      `,
     })
     expect(yield innerText('h2')).to.equal('I am Slot')
 

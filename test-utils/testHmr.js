@@ -62,7 +62,32 @@ const testHmr = (description, handler, test = it) =>
           break
 
         case INIT: {
-          const files = renderFiles(templates, effect.inits)
+          const _inits = {}
+          // accepts templates as initial file content; template is rendered
+          // with `undefined` as only argument
+          //
+          // yield init({
+          //   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
+          // })
+          //
+          // equivalent to:
+          //
+          // yield templates({
+          //   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
+          // })
+          // yield init({
+          //   'App.svelte': undefined
+          // })
+          //
+          Object.entries(effect.inits).forEach(([path, init]) => {
+            if (typeof init === 'function') {
+              templates[path] = init
+              _inits[path] = undefined
+            } else {
+              _inits[path] = init
+            }
+          })
+          const files = renderFiles(templates, _inits)
           Object.assign(inits, files)
           break
         }
