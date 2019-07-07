@@ -8,16 +8,14 @@
     "test:watch": "npm test -- -w",
     "test:debug": "mocha debug --recursive --timeout 5000 --reporter mocha-unfunk-reporter test-utils/bootstrap.js test"
   },
-  "author": "rixo <eric@rixo.fr>",
+  "author": "rixo <rixo@rixo.fr>",
   "license": "MIT",
   "dependencies": {
-    "body-parser": "^1.19.0",
     "chai": "^4.2.0",
     "dedent": "^0.7.0",
     "express": "^4.17.1",
     "glob": "^7.1.4",
     "linkfs": "^2.1.0",
-    "memfs": "^2.15.4",
     "memory-fs": "^0.4.1",
     "mocha": "^6.1.4",
     "mocha-unfunk-reporter": "^0.4.0",
