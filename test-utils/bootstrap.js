@@ -12,17 +12,17 @@ const PORT = 8080
 
 const baseUrl = `http://${HOST}:${PORT}`
 
-const globalVariables = {}
+const originalGlobals = {}
 
 const setGlobals = values => {
   Object.entries(values).forEach(([key, value]) => {
-    globalVariables[key] = global[key]
+    originalGlobals[key] = global[key]
     global[key] = value
   })
 }
 
 const restoreGlobals = () => {
-  Object.entries(globalVariables).forEach(([key, value]) => {
+  Object.entries(originalGlobals).forEach(([key, value]) => {
     global[key] = value
   })
 }
