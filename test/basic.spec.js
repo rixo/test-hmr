@@ -4,7 +4,7 @@ const {
   templates,
   change,
   innerText,
-} = require('./utils/testHmr')
+} = require('../test-utils/testHmr')
 
 describe('basic HMR', () => {
   testHmr('replaces text content (twice)', function*() {

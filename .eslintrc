@@ -5,7 +5,7 @@ env:
   node: true
 
 overrides:
-  - files: ["test/**"]
+  - files: ["test/**", "test-utils/**"]
     env:
       mocha: true
     globals:

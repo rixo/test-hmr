@@ -1,7 +1,13 @@
 const fetch = require('node-fetch')
 
-const { reset, inPage, innerText, writeFiles, hmrDone } = require('./utils')
-const config = require('./utils/config')
+const {
+  reset,
+  inPage,
+  innerText,
+  writeFiles,
+  hmrDone,
+} = require('../test-utils')
+const config = require('../test-utils/config')
 
 describe('sanity check', () => {
   it('runs tests', () => {

@@ -91,9 +91,8 @@ const start = () =>
       before: app => {
         app.use(
           RemoteControl({
-            root: APP,
-            vfs,
-            onEmit,
+            writeFiles,
+            reset,
           })
         )
       },

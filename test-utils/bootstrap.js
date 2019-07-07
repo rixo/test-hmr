@@ -1,9 +1,9 @@
 const { expect } = require('chai')
 const puppeteer = require('puppeteer')
 
-const { startWebpack } = require('../app/test-utils')
+const { startWebpack } = require('../app/test-server')
 
-const { fastResetStrategy } = require('./utils/config')
+const { fastResetStrategy } = require('../test-utils/config')
 
 const { DEBUG } = process.env
 
@@ -69,12 +69,10 @@ const setupDefaultWebpack = () => {
 
 const setupFastWebpack = () => {
   let app
-
   before(async () => {
     app = await startWebpack()
     setGlobals({ app })
   })
-
   after(() => {
     if (app) {
       return app.close().catch(err => {

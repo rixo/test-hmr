@@ -4,9 +4,9 @@
   "description": "Test suite for svelte HMR",
   "main": "index.js",
   "scripts": {
-    "test": "mocha test/bootstrap.js --recursive --timeout 5000 --reporter mocha-unfunk-reporter test",
+    "test": "mocha --recursive --timeout 5000 --reporter mocha-unfunk-reporter test-utils/bootstrap.js test",
     "test:watch": "npm test -- -w",
-    "test:debug": "mocha debug test/bootstrap.js --recursive --timeout 5000 --reporter mocha-unfunk-reporter test"
+    "test:debug": "mocha debug --recursive --timeout 5000 --reporter mocha-unfunk-reporter test-utils/bootstrap.js test"
   },
   "author": "rixo <eric@rixo.fr>",
   "license": "MIT",
