@@ -1,20 +1,45 @@
-const { inPage, innerText, writeHmr } = require('.')
+const {
+  testHmr,
+  init,
+  templates,
+  change,
+  innerText,
+} = require('./utils/testHmr')
 
 describe('basic HMR', () => {
-  it(
-    'replaces text content (twice)',
-    inPage('/', async page => {
-      expect(await innerText(page, 'h1')).to.equal('Hello world!')
+  testHmr('replaces text content (twice)', function*() {
+    expect(yield innerText('h1')).to.equal('Hello world!')
 
-      await writeHmr(page, {
-        'App.svelte': '<h1>HMRd</h1>',
-      })
-      expect(await innerText(page, 'h1')).to.equal('HMRd')
-
-      await writeHmr(page, {
-        'App.svelte': '<h1>HMRd (twice)</h1>',
-      })
-      expect(await innerText(page, 'h1')).to.equal('HMRd (twice)')
+    yield change({
+      'App.svelte': '<h1>HMRd</h1>',
     })
-  )
+    expect(yield innerText('h1')).to.equal('HMRd')
+
+    yield change({
+      'App.svelte': '<h1>reHMRd</h1>',
+    })
+    expect(yield innerText('h1')).to.equal('reHMRd')
+  })
+
+  testHmr('replaces child text when child changes', function*() {
+    yield templates({
+      'App.svelte': slot => `
+        <script>
+          import Child from './Child'
+        </script>
+        ${slot}
+      `,
+    })
+
+    yield init({
+      'App.svelte': '<Child />',
+      'Child.svelte': '<h2>I am Child</h2>',
+    })
+    expect(yield innerText('h2')).to.equal('I am Child')
+
+    yield change({
+      'Child.svelte': '<h2>I am Kid</h2>',
+    })
+    expect(yield innerText('h2')).to.equal('I am Kid')
+  })
 })

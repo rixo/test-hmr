@@ -5,13 +5,15 @@ env:
   node: true
 
 overrides:
-  - files: ["*.spec.js"]
+  - files: ["test/**"]
     env:
       mocha: true
     globals:
       browser: true
       baseUrl: true
-      rc: true
+      app: true
       expect: true
     rules:
+      # chai assertions are often considred unused expressions
       no-unused-expressions: off
+      require-atomic-updates: off

@@ -19,6 +19,9 @@ const PORT = 8080
 const HOST = 'localhost'
 const PROTOCOL = 'http'
 
+const inSrc = file =>
+  file ? path.join(APP, 'src', file) : path.join(APP, 'src')
+
 const createOnEmit = compiler => {
   const listeners = []
 
@@ -53,6 +56,30 @@ const start = () =>
 
     const onEmit = createOnEmit(compiler)
 
+    const writeFile = (filePath, contents) =>
+      new Promise((resolve, reject) => {
+        const srcPath = inSrc(filePath)
+        vfs.out.mkdirpSync(path.dirname(srcPath))
+        vfs.out.writeFile(srcPath, contents, 'utf8', err => {
+          if (err) reject(err)
+          else resolve(srcPath)
+        })
+      })
+
+    const writeFiles = async files => {
+      const paths = await Promise.all(
+        Object.entries(files).map(([path, contents]) =>
+          writeFile(path, contents)
+        )
+      )
+      await Promise.all([onEmit(), vfs.notify(paths)])
+    }
+
+    const reset = async files => {
+      await vfs.reset(files)
+      return onEmit()
+    }
+
     const server = new WebpackDevServer(compiler, {
       contentBase: path.join(APP, 'public'),
       public: `${PROTOCOL}://${HOST}:${PORT}`,
@@ -72,11 +99,6 @@ const start = () =>
       },
     })
 
-    const reset = async () => {
-      await vfs.reset()
-      return onEmit()
-    }
-
     server.listen(PORT, HOST, function(err) {
       if (err) reject(err)
       else {
@@ -87,6 +109,7 @@ const start = () =>
         resolve({
           close,
           reset,
+          writeFiles,
         })
       }
     })

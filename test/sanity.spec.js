@@ -1,6 +1,7 @@
 const fetch = require('node-fetch')
 
-const { inPage, innerText, writeFiles, hmrDone } = require('.')
+const { reset, inPage, innerText, writeFiles, hmrDone } = require('./utils')
+const config = require('./utils/config')
 
 describe('sanity check', () => {
   it('runs tests', () => {
@@ -12,39 +13,45 @@ describe('sanity check', () => {
     expect(version).not.to.be.undefined
   })
 
-  it(
-    'can load app',
-    inPage('/', async page => {
-      expect(await innerText(page, 'h1')).to.equal('Hello world!')
+  if (config.rcOverHttp) {
+    it('can reach webpack rc server', async () => {
+      const res = await fetch('http://localhost:8080/_dev/ping')
+      expect(res.ok).to.be.true
+      expect(res.status).to.equal(200)
+      expect(await res.text()).to.equal('pong')
     })
-  )
+  }
 
-  it('can reach webpack rc server', async () => {
-    const res = await fetch('http://localhost:8080/_dev/ping')
-    expect(res.ok).to.be.true
-    expect(res.status).to.equal(200)
-    expect(await res.text()).to.equal('pong')
-  })
+  describe('remote control', () => {
+    beforeEach(reset)
 
-  it(
-    'can trigger HMR',
-    inPage('/', async page => {
-      expect(await innerText(page, 'h1')).to.equal('Hello world!')
-
-      await writeFiles({
-        'App.svelte': '<h1>HMRd</h1>',
+    it(
+      'can load app',
+      inPage('/', async page => {
+        expect(await innerText(page, 'h1')).to.equal('Hello world!')
       })
+    )
 
-      await hmrDone(page)
+    it(
+      'can trigger HMR',
+      inPage('/', async page => {
+        expect(await innerText(page, 'h1')).to.equal('Hello world!')
 
-      expect(await innerText(page, 'h1')).to.equal('HMRd')
-    })
-  )
+        await writeFiles({
+          'App.svelte': '<h1>HMRd</h1>',
+        })
 
-  it(
-    'reset overwritten sources for each test',
-    inPage('/', async page => {
-      expect(await innerText(page, 'h1')).to.equal('Hello world!')
-    })
-  )
+        await hmrDone(page)
+
+        expect(await innerText(page, 'h1')).to.equal('HMRd')
+      })
+    )
+
+    it(
+      'can reset source files',
+      inPage('/', async page => {
+        expect(await innerText(page, 'h1')).to.equal('Hello world!')
+      })
+    )
+  })
 })

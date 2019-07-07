@@ -1,23 +1,8 @@
-/* eslint-env mocha */
-/* globals browser, baseUrl */
+const { rcOverHttp } = require('./config')
 
-const { expect } = require('chai')
-const fetch = require('node-fetch')
+const rcUtils = require(rcOverHttp ? './rc-http' : './rc-process')
 
-const writeFiles = async files => {
-  const res = await fetch('http://localhost:8080/_dev/src', {
-    method: 'PUT',
-    headers: {
-      'Content-type': 'application/json',
-    },
-    body: JSON.stringify({ files }),
-  })
-  if (!res.ok) {
-    // eslint-disable-next-line no-console
-    console.error(await res.text())
-  }
-  expect(res.status).to.equal(200)
-}
+const { writeFiles, reset } = rcUtils
 
 const innerText = async (page, selector) => {
   return page.$eval(selector, el => el.innerText)
@@ -49,9 +34,10 @@ const writeHmr = async (page, files) => {
 
 module.exports = {
   writeFiles,
+  reset,
   writeHmr,
   innerText,
-  // loadPage,
+  loadPage,
   inPage,
   hmrDone,
 }

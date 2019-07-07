@@ -96,8 +96,8 @@ function VirtualFs({ srcDir }) {
 
   ufs.notify = (...args) => notify(...args)
 
-  ufs.reset = async () => {
-    const changes = await mfs.nuke()
+  ufs.reset = async files => {
+    const changes = await mfs.nuke(files)
     if (notify) {
       await notify(changes)
     }

@@ -1,10 +1,9 @@
-/* eslint-env mocha */
-/* globals browser */
-
 const { expect } = require('chai')
 const puppeteer = require('puppeteer')
 
 const { startWebpack } = require('../app/test-utils')
+
+const { fastResetStrategy } = require('./utils/config')
 
 const { DEBUG } = process.env
 
@@ -12,17 +11,6 @@ const HOST = 'localhost'
 const PORT = 8080
 
 const baseUrl = `http://${HOST}:${PORT}`
-
-// default: relaunch webpack dev server before each test
-//
-// fast: launch a single webpack dev server for all tests, and simply reset
-//   source files (and do a full recompile of main.js entry point)
-//
-// fast is faster but may encounter stability issues... especially since it
-// is not completely implemented yet
-//
-const resetStrategy = 'fast'
-// const resetStrategy = 'stable'
 
 const globalVariables = {}
 
@@ -44,7 +32,7 @@ const startPuppeteer = async () => {
   const opts = DEBUG
     ? {
         headless: false,
-        // slowMo: 200,
+        slowMo: 100,
         timeout: 10000,
         devtools: true,
       }
@@ -52,69 +40,53 @@ const startPuppeteer = async () => {
   return await puppeteer.launch(opts)
 }
 
-const defaultResetHandler = () => {
-  let closeWebpack
-
-  before(async () => {
-    const [rc, browser] = await Promise.all([startWebpack(), startPuppeteer()])
-    if (rc) {
-      closeWebpack = () => {
-        closeWebpack = null
-        return rc.close().catch(err => {
-          // eslint-disable-next-line no-console
-          console.warn('Failed to close webpack dev server', err)
-        })
-      }
-    }
-    setGlobals({ baseUrl, expect, browser, rc })
-  })
-
-  after(async () => {
-    const ops = [browser.close()]
-    if (closeWebpack) {
-      ops.push(closeWebpack())
-    }
-    await Promise.all(ops)
-    if (closeWebpack) {
-      restoreGlobals()
-    }
-  })
-}
-
-const fastResetHandler = () => {
+function setupPuppeteer() {
   before(async () => {
     const browser = await startPuppeteer()
-    setGlobals({ baseUrl, expect, browser })
+    setGlobals({ browser })
   })
-
   after(async () => {
     await browser.close()
     restoreGlobals()
   })
-
-  {
-    let rc
-    before(async () => {
-      rc = await startWebpack()
-      setGlobals({ baseUrl, expect, browser, rc })
-    })
-    after(() => {
-      if (rc) {
-        return rc.close().catch(err => {
-          // eslint-disable-next-line no-console
-          console.warn('Failed to close webpack dev server', err)
-        })
-      }
-    })
-    beforeEach(async () => {
-      // eslint-disable-next-line no-unused-expressions
-      expect(rc).not.to.be.undefined
-      await rc.reset()
-    })
-  }
 }
 
-const resetHandler =
-  resetStrategy === 'fast' ? fastResetHandler : defaultResetHandler
+const setupDefaultWebpack = () => {
+  let app
+  beforeEach(async () => {
+    app = await startWebpack()
+    setGlobals({ app })
+  })
+  afterEach(() => {
+    if (app) {
+      return app.close().catch(err => {
+        // eslint-disable-next-line no-console
+        console.warn('Failed to close webpack dev server', err)
+      })
+    }
+  })
+}
 
-resetHandler()
+const setupFastWebpack = () => {
+  let app
+
+  before(async () => {
+    app = await startWebpack()
+    setGlobals({ app })
+  })
+
+  after(() => {
+    if (app) {
+      return app.close().catch(err => {
+        // eslint-disable-next-line no-console
+        console.warn('Failed to close webpack dev server', err)
+      })
+    }
+  })
+}
+
+const setupWebpack = fastResetStrategy ? setupFastWebpack : setupDefaultWebpack
+
+setGlobals({ baseUrl, expect })
+setupWebpack()
+setupPuppeteer()
