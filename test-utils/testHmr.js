@@ -78,35 +78,126 @@ const renderSpecs = ({ specs }, spec, rm = change.rm) =>
       .filter(([, step]) => !!step)
   )
 
-// const parseSpec = (() => {
-//   const fileRegex = /^\s*====\s*([^=]+)\s*====\s*$/
-//
-//   return spec => {
-//     const inits = {}
-//     const templates = {}
-//     const sourceLines = spec.split('\n')
-//     sourceLines.forEach(line => {
-//       const filenameMatch = fileRegex.exec(line)
-//       if (filenameMatch) {
-//         debugger
-//       }
-//     })
-//   }
-// })()
-
 const processTemplates = (state, effect) => {
   Object.assign(state.templates, effect.templates)
 }
 
-const processSpec = (state, effect) => {
-  const entries = Object.entries(effect.specs).map(([file, spec]) => {
-    if (typeof spec === 'string') {
-      return [file, { '*': spec }]
+const parseSpecObject = (state, specs) =>
+  Object.fromEntries(
+    Object.entries(specs).map(([file, spec]) => {
+      if (typeof spec === 'string') {
+        return [file, { '*': spec }]
+      }
+      return [file, spec]
+    })
+  )
+
+const parseSpecString = (() => {
+  const nameRegex = /^\s*====\s*([^=\s]+)(?:\s*====\s*)?$/
+
+  const emptyRegex = /^\s*$/
+
+  const isEmpty = emptyRegex.test.bind(emptyRegex)
+
+  const condRegex = /^(\s*)#([^\s+])\s+(.*)$/
+
+  const parseConditions = lines => {
+    const leading = []
+    const conditions = {}
+
+    const getCondition = label => {
+      let cond = conditions[label]
+      if (!cond) {
+        cond = [...leading]
+        conditions[label] = cond
+      }
+      return cond
     }
-    return [file, spec]
-  })
-  const specs = Object.fromEntries(entries)
-  Object.assign(state.specs, specs)
+
+    const pushLine = line => {
+      leading.push(line)
+      Object.values(conditions).forEach(cond => {
+        cond.push(line)
+      })
+    }
+
+    lines.forEach(line => {
+      const condMatch = condRegex.exec(line)
+      if (condMatch) {
+        const [, indent, label, content] = condMatch
+        const condition = getCondition(label)
+        condition.push(indent + content)
+      } else {
+        pushLine(line)
+      }
+    })
+
+    // guard: no conditions
+    if (Object.keys(conditions).length === 0) {
+      return {
+        '*': leading.join('\n'),
+      }
+    }
+    // with conditions
+    return Object.fromEntries(
+      Object.entries(conditions).map(([file, lines]) => [
+        file,
+        lines.join('\n'),
+      ])
+    )
+  }
+
+  return (state, specs) => {
+    const specLines = specs.split('\n')
+
+    const result = {}
+    let currentFile
+    let currentLines
+
+    const endFile = () => {
+      result[currentFile] = parseConditions(currentLines)
+    }
+
+    const maybeEndFile = () => {
+      if (currentLines) {
+        endFile()
+      }
+    }
+
+    const startFile = filename => {
+      maybeEndFile()
+      currentFile = filename
+      // empty line for indentation consistency (read: this ways, it is
+      // easier to write expectations to test parseSpecString)
+      currentLines = ['']
+    }
+
+    specLines.forEach(line => {
+      const nameMatch = nameRegex.exec(line)
+      if (nameMatch) {
+        startFile(nameMatch[1])
+      } else {
+        if (!currentLines) {
+          if (isEmpty(line)) {
+            return
+          }
+          throw new Error('Invalid spec string: ' + specs)
+        }
+        currentLines.push(line)
+      }
+    })
+
+    // last file
+    maybeEndFile()
+
+    return result
+  }
+})()
+
+const processSpec = (state, { specs }) => {
+  const parser = typeof specs === 'string' ? parseSpecString : parseSpecObject
+  const result = parser(state, specs)
+  Object.assign(state.specs, result)
 }
 
 const initEffectProcessor = (state, start) => async effect => {

@@ -140,6 +140,135 @@ describe.only('test utils: testHmr', () => {
     })
   })
 
+  describe.only('yield spec("string")', () => {
+    hit('registers simple specs with shortcut', function*() {
+      yield spec(`
+        ==== ether ====
+        I just am.
+      `)
+      const ether = `
+        I just am.
+      `
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        ether: {
+          '*': ether,
+        },
+      })
+    })
+
+    hit('registers multiple specs with shortcut', function*() {
+      yield spec(`
+        ==== first ====
+        I am just above.
+        ==== second ====
+        I am just bellow.
+      `)
+      const first = `
+        I am just above.`
+      const second = `
+        I am just bellow.
+      `
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        first: {
+          '*': first,
+        },
+        second: {
+          '*': second,
+        },
+      })
+    })
+
+    hit('can be called multiple times (before init)', function*() {
+      yield spec(`
+        ==== first ====
+        I am just above.
+      `)
+      yield spec(`
+        ==== second ====
+        I am just bellow.
+      `)
+      const first = `
+        I am just above.
+      `
+      const second = `
+        I am just bellow.
+      `
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        first: {
+          '*': first,
+        },
+        second: {
+          '*': second,
+        },
+      })
+    })
+
+    hit('parses single line conditions', function*() {
+      yield spec(`
+        ==== foo.js ====
+        top
+        #0 on 0
+        middle
+        #1 on 1
+        bottom
+      `)
+      const foo0 = `
+        top
+        on 0
+        middle
+        bottom
+      `
+      const foo1 = `
+        top
+        middle
+        on 1
+        bottom
+      `
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        'foo.js': {
+          0: foo0,
+          1: foo1,
+        },
+      })
+    })
+
+    hit.skip('parses muliline conditions', function*() {
+      yield spec(`
+        ==== foo.js ====
+        top
+        #0 {
+          function foo() { console.log('bar') }
+        }
+        middle
+        #1 on 1
+        bottom
+      `)
+      const foo0 = `
+        top
+          function foo() { console.log('bar') }
+        middle
+        bottom
+      `
+      const foo1 = `
+        top
+        middle
+        on 1
+        bottom
+      `
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        'foo.js': {
+          0: foo0,
+          1: foo1,
+        },
+      })
+    })
+  })
+
   describe('yield init({...})', () => {
     hit('configures initial files', function*() {
       yield init({
