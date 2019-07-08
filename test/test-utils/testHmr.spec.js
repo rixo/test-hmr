@@ -121,6 +121,15 @@ describe.only('test utils: testHmr', () => {
   describe('yield spec({...})', () => {
     hit('registers full specs', function*() {
       yield spec({ foo: 'FOO', bar: { 0: 'BAR' } })
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        foo: { '*': 'FOO' },
+        bar: { 0: 'BAR' },
+      })
+    })
+
+    hit('can be called multiple times (before init)', function*() {
+      yield spec({ foo: 'FOO', bar: { 0: 'BAR' } })
       yield spec({ baz: { '*': 'BAZ' } })
       const state = yield debug()
       expect(state.specs).to.deep.equal({
