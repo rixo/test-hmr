@@ -1,6 +1,7 @@
 const {
   testHmr: { create: createTestHmr },
   templates,
+  spec,
   init,
   debug,
   change,
@@ -9,7 +10,7 @@ const {
 
 const noop = () => {}
 
-describe('test utils: testHmr', () => {
+describe.only('test utils: testHmr', () => {
   let _it
   let reset
   let writeHmr
@@ -117,6 +118,19 @@ describe('test utils: testHmr', () => {
     })
   })
 
+  describe('yield spec({...})', () => {
+    hit('registers full specs', function*() {
+      yield spec({ foo: 'FOO', bar: { 0: 'BAR' } })
+      yield spec({ baz: { '*': 'BAZ' } })
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        foo: { '*': 'FOO' },
+        bar: { 0: 'BAR' },
+        baz: { '*': 'BAZ' },
+      })
+    })
+  })
+
   describe('yield init(...)', () => {
     hit('configures initial files', function*() {
       yield init({
@@ -181,6 +195,59 @@ describe('test utils: testHmr', () => {
         'App.svelte': 'bar',
       })
       expect(writeHmr).to.have.been.calledTwice
+    })
+  })
+
+  describe('yield change(spec)', () => {
+    hit('always includes string specs', function*() {
+      yield spec({ always: 'ALWAYS' })
+      yield change(0)
+      expect(writeHmr).to.have.been.calledWith(page, { always: 'ALWAYS' })
+    })
+
+    hit('always includes * specs', function*() {
+      yield spec({ always: { '*': 'ALWAYS' } })
+      yield change(0)
+      expect(writeHmr).to.have.been.calledWith(page, { always: 'ALWAYS' })
+      yield change(1)
+      expect(writeHmr).to.have.been.calledWith(page, { always: 'ALWAYS' })
+    })
+
+    hit('conditionnaly includes labeled specs', function*() {
+      yield spec({ foo: { 0: 'FOO' }, bar: { 1: 'BAR' } })
+      yield change(0)
+      expect(writeHmr).to.have.been.calledWith(page, {
+        foo: 'FOO',
+        bar: change.rm,
+      })
+      yield change(1)
+      expect(writeHmr).to.have.been.calledWith(page, {
+        foo: change.rm,
+        bar: 'BAR',
+      })
+    })
+  })
+
+  describe('yield init(spec)', () => {
+    hit('always includes string specs', function*() {
+      yield spec({ always: 'ALWAYS' })
+      yield init(0)
+      const state = yield debug()
+      expect(state.inits).to.deep.equal({ always: 'ALWAYS' })
+    })
+
+    hit('always includes * specs', function*() {
+      yield spec({ always: { '*': 'ALWAYS' } })
+      yield init(0)
+      const state = yield debug()
+      expect(state.inits).to.deep.equal({ always: 'ALWAYS' })
+    })
+
+    hit('conditionnaly includes labeled specs', function*() {
+      yield spec({ foo: { 0: 'FOO' }, bar: { 1: 'BAR' } })
+      yield init(1)
+      const state = yield debug()
+      expect(state.inits).to.deep.equal({ bar: 'BAR' })
     })
   })
 })

@@ -4,6 +4,7 @@ const { writeHmr, loadPage } = require('.')
 
 const INIT = 'init'
 const TEMPLATES = 'templates'
+const SPEC = 'specs'
 const CHANGE = 'changes'
 const INNER_TEXT = 'inner_text'
 const DEBUG = 'debug'
@@ -20,17 +21,92 @@ const consume = async (gen, callback, firstValue) => {
   } while (!next.done)
 }
 
-const renderFiles = ({ templates }, inits) =>
-  Object.fromEntries(
-    Object.entries(inits).map(([key, value]) => {
+// accepts templates as initial file content; templates are also rendered
+// with `undefined` as only argument, and included into initial files (inits)
+//
+// yield init({
+//   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
+// })
+//
+// equivalent to:
+//
+// yield templates({
+//   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
+// })
+// yield init({
+//   'App.svelte': undefined
+// })
+//
+const initChanges = (state, { inits }) => {
+  // support for spec-change `init(0)`
+  if (typeof inits !== 'object') {
+    return inits
+  }
+  const changes = {}
+  Object.entries(inits).forEach(([path, init]) => {
+    if (typeof init === 'function') {
+      state.templates[path] = init
+      changes[path] = undefined
+    } else {
+      changes[path] = init
+    }
+  })
+  return changes
+}
+
+const renderFiles = (state, changes, rm) => {
+  if (typeof changes === 'string' || typeof changes === 'number') {
+    return renderSpecs(state, changes, rm)
+  }
+  const { templates } = state
+  return Object.fromEntries(
+    Object.entries(changes).map(([key, value]) => {
       const template = templates[key]
       const contents = template ? template(value) : value
       return [key, contents]
     })
   )
+}
+
+const renderSpecs = ({ specs }, spec, rm = change.rm) =>
+  Object.fromEntries(
+    Object.entries(specs)
+      .map(([path, fileSpec]) => {
+        const content = fileSpec[spec] || fileSpec['*'] || rm
+        return [path, content]
+      })
+      .filter(([, step]) => !!step)
+  )
+
+// const parseSpec = (() => {
+//   const fileRegex = /^\s*====\s*([^=]+)\s*====\s*$/
+//
+//   return spec => {
+//     const inits = {}
+//     const templates = {}
+//     const sourceLines = spec.split('\n')
+//     sourceLines.forEach(line => {
+//       const filenameMatch = fileRegex.exec(line)
+//       if (filenameMatch) {
+//         debugger
+//       }
+//     })
+//   }
+// })()
 
 const processTemplates = (state, effect) => {
   Object.assign(state.templates, effect.templates)
+}
+
+const processSpec = (state, effect) => {
+  const entries = Object.entries(effect.specs).map(([file, spec]) => {
+    if (typeof spec === 'string') {
+      return [file, { '*': spec }]
+    }
+    return [file, spec]
+  })
+  const specs = Object.fromEntries(entries)
+  Object.assign(state.specs, specs)
 }
 
 const initEffectProcessor = (state, start) => async effect => {
@@ -41,34 +117,12 @@ const initEffectProcessor = (state, start) => async effect => {
     case TEMPLATES:
       return processTemplates(state, effect)
 
-    case INIT: {
-      const changes = {}
+    case SPEC:
+      return processSpec(state, effect)
 
-      // accepts templates as initial file content; template is rendered
-      // with `undefined` as only argument
-      //
-      // yield init({
-      //   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
-      // })
-      //
-      // equivalent to:
-      //
-      // yield templates({
-      //   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
-      // })
-      // yield init({
-      //   'App.svelte': undefined
-      // })
-      //
-      Object.entries(effect.inits).forEach(([path, init]) => {
-        if (typeof init === 'function') {
-          state.templates[path] = init
-          changes[path] = undefined
-        } else {
-          changes[path] = init
-        }
-      })
-      const files = renderFiles(state, changes)
+    case INIT: {
+      const changes = initChanges(state, effect)
+      const files = renderFiles(state, changes, false)
       Object.assign(state.inits, files)
       break
     }
@@ -115,6 +169,7 @@ const createTestHmr = (options = {}) => {
         pageUrl: '/',
         templates: {},
         inits: {},
+        specs: {},
       }
 
       const processEffect = effectProcessor(state, config)
@@ -162,6 +217,11 @@ const templates = templates => ({
   templates,
 })
 
+const spec = specs => ({
+  type: SPEC,
+  specs,
+})
+
 const innerText = selector => ({
   type: INNER_TEXT,
   selector,
@@ -182,6 +242,7 @@ module.exports = {
   testHmr,
   init,
   templates,
+  spec,
   innerText,
   change,
   debug,
