@@ -6,10 +6,10 @@ const {
   innerText,
   writeFiles,
   hmrDone,
-} = require('../test-utils')
-const config = require('../test-utils/config')
+} = require('../../test-utils')
+const config = require('../../test-utils/config')
 
-describe('sanity check', () => {
+describe('test utils: sanity check', () => {
   it('runs tests', () => {
     expect(true).to.be.true
   })
@@ -28,7 +28,9 @@ describe('sanity check', () => {
     })
   }
 
-  describe('remote control', () => {
+  describe('remote control', function() {
+    this.slow(1000)
+
     beforeEach(reset)
 
     it(

@@ -6,6 +6,7 @@ const INIT = 'init'
 const TEMPLATES = 'templates'
 const CHANGE = 'changes'
 const INNER_TEXT = 'inner_text'
+const DEBUG = 'debug'
 
 const consume = async (gen, callback, firstValue) => {
   let next
@@ -19,7 +20,7 @@ const consume = async (gen, callback, firstValue) => {
   } while (!next.done)
 }
 
-const renderFiles = (templates, inits) =>
+const renderFiles = ({ templates }, inits) =>
   Object.fromEntries(
     Object.entries(inits).map(([key, value]) => {
       const template = templates[key]
@@ -28,79 +29,131 @@ const renderFiles = (templates, inits) =>
     })
   )
 
-const testHmr = (description, handler, test = it) =>
-  test(description, async () => {
-    const gen = handler({ innerText })
-    const pageUrl = '/'
-    const templates = {}
-    const inits = {}
+const processTemplates = (state, effect) => {
+  Object.assign(state.templates, effect.templates)
+}
 
-    const start = async firstEffect => {
-      // await writeHmr(inits)
-      await app.reset(inits)
-      await loadPage(pageUrl, async page => {
-        const handleEffect = async effect => {
-          switch (effect.type) {
-            case CHANGE: {
-              const files = renderFiles(templates, effect.changes)
-              await writeHmr(page, files)
-              break
-            }
-            case INNER_TEXT:
-              return await page.$eval(effect.selector, el => el && el.innerText)
-          }
+const initEffectProcessor = (state, start) => async effect => {
+  switch (effect.type) {
+    case DEBUG:
+      return state
+
+    case TEMPLATES:
+      return processTemplates(state, effect)
+
+    case INIT: {
+      const changes = {}
+
+      // accepts templates as initial file content; template is rendered
+      // with `undefined` as only argument
+      //
+      // yield init({
+      //   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
+      // })
+      //
+      // equivalent to:
+      //
+      // yield templates({
+      //   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
+      // })
+      // yield init({
+      //   'App.svelte': undefined
+      // })
+      //
+      Object.entries(effect.inits).forEach(([path, init]) => {
+        if (typeof init === 'function') {
+          state.templates[path] = init
+          changes[path] = undefined
+        } else {
+          changes[path] = init
         }
-        const firstValue = await handleEffect(firstEffect)
-        await consume(gen, handleEffect, firstValue)
       })
+      const files = renderFiles(state, changes)
+      Object.assign(state.inits, files)
+      break
     }
 
-    await consume(gen, async effect => {
-      switch (effect.type) {
-        case TEMPLATES:
-          Object.assign(templates, effect.templates)
-          break
+    default:
+      return await start(effect)
+  }
+}
 
-        case INIT: {
-          const _inits = {}
-          // accepts templates as initial file content; template is rendered
-          // with `undefined` as only argument
-          //
-          // yield init({
-          //   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
-          // })
-          //
-          // equivalent to:
-          //
-          // yield templates({
-          //   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
-          // })
-          // yield init({
-          //   'App.svelte': undefined
-          // })
-          //
-          Object.entries(effect.inits).forEach(([path, init]) => {
-            if (typeof init === 'function') {
-              templates[path] = init
-              _inits[path] = undefined
-            } else {
-              _inits[path] = init
-            }
-          })
-          const files = renderFiles(templates, _inits)
-          Object.assign(inits, files)
-          break
+const effectProcessor = (state, { writeHmr }) => async effect => {
+  switch (effect.type) {
+    case DEBUG:
+      return state
+
+    case TEMPLATES:
+      return processTemplates(state, effect)
+
+    case CHANGE: {
+      const files = renderFiles(state, effect.changes)
+      await writeHmr(state.page, files)
+      break
+    }
+
+    case INNER_TEXT:
+      return await state.page.$eval(effect.selector, el => el && el.innerText)
+  }
+}
+
+const createTestHmr = (options = {}) => {
+  const config = {
+    it,
+    loadPage,
+    reset: (...args) => app.reset(...args),
+    writeHmr,
+    ...options,
+  }
+  return (description, handler) => {
+    const { it, reset, loadPage } = config
+    return it(description, async function() {
+      this.slow(1000)
+
+      const gen = handler()
+      const state = {
+        pageUrl: '/',
+        templates: {},
+        inits: {},
+      }
+
+      const processEffect = effectProcessor(state, config)
+
+      // reset HRM sources & set initial source files
+      const initTest = async () => {
+        await reset(state.inits)
+        delete state.inits // free mem
+      }
+
+      const start = async firstEffect => {
+        const inPage = async page => {
+          state.page = page
+          const firstValue = await processEffect(firstEffect)
+          await consume(gen, processEffect, firstValue)
         }
 
-        default:
-          return await start(effect)
+        await initTest()
+
+        await loadPage(state.pageUrl, inPage)
       }
+
+      const processInitEffect = initEffectProcessor(state, start)
+
+      await consume(gen, processInitEffect)
     })
-  })
+  }
+}
 
-testHmr.skip = (description, handler) => testHmr(description, handler, it.skip)
+const testHmr = createTestHmr()
 
-testHmr.only = (description, handler) => testHmr(description, handler, it.only)
+// for testing of testHmr itself
+testHmr.create = createTestHmr
+
+testHmr.skip = createTestHmr({ test: it.skip })
+
+testHmr.only = createTestHmr({ test: it.only })
+
+// === Effects ===
 
 const init = inits => ({ type: INIT, inits })
 
@@ -119,10 +172,17 @@ const change = changes => ({
   changes,
 })
 
+change.rm = Symbol('change: rm')
+
+const debug = () => ({ type: DEBUG })
+
+// === Export ===
+
 module.exports = {
   testHmr,
   init,
   templates,
   innerText,
   change,
+  debug,
 }

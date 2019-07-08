@@ -1,4 +1,6 @@
-const { expect } = require('chai')
+const chai = require('chai')
+const sinonChai = require('sinon-chai')
+const sinon = require('sinon')
 const puppeteer = require('puppeteer')
 
 const { startWebpack } = require('../app/test-server')
@@ -7,12 +9,10 @@ const { fastResetStrategy } = require('../test-utils/config')
 
 const { DEBUG } = process.env
 
-const HOST = 'localhost'
-const PORT = 8080
-
-const baseUrl = `http://${HOST}:${PORT}`
-
 const originalGlobals = {}
+
+chai.use(sinonChai)
+const { expect } = chai
 
 const setGlobals = values => {
   Object.entries(values).forEach(([key, value]) => {
@@ -85,6 +85,6 @@ const setupFastWebpack = () => {
 
 const setupWebpack = fastResetStrategy ? setupFastWebpack : setupDefaultWebpack
 
-setGlobals({ baseUrl, expect })
+setGlobals({ expect, sinon })
 setupWebpack()
 setupPuppeteer()

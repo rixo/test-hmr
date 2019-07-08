@@ -10,9 +10,9 @@ overrides:
       mocha: true
     globals:
       browser: true
-      baseUrl: true
       app: true
       expect: true
+      sinon: true
     rules:
       # chai assertions are often considred unused expressions
       no-unused-expressions: off

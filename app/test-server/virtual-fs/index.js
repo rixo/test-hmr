@@ -16,8 +16,7 @@ function VirtualFs({ srcDir }) {
   const ufs = new Union().use(cached).use(mfs)
 
   let notify
-
-  const times = {}
+  let times = {}
 
   ufs.watch = (
     filePathsBeingWatched,
@@ -98,6 +97,7 @@ function VirtualFs({ srcDir }) {
 
   ufs.reset = async files => {
     const changes = await mfs.nuke(files)
+    times = {}
     if (notify) {
       await notify(changes)
     }

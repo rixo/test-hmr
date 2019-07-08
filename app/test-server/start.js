@@ -19,6 +19,8 @@ const PORT = 8080
 const HOST = 'localhost'
 const PROTOCOL = 'http'
 
+const baseUrl = `${PROTOCOL}://${HOST}:${PORT}`
+
 const inSrc = file =>
   file ? path.join(APP, 'src', file) : path.join(APP, 'src')
 
@@ -82,7 +84,7 @@ const start = () =>
 
     const server = new WebpackDevServer(compiler, {
       contentBase: path.join(APP, 'public'),
-      public: `${PROTOCOL}://${HOST}:${PORT}`,
+      public: baseUrl,
       publicPath: '/',
       inline: true,
       hot: true,
@@ -106,6 +108,7 @@ const start = () =>
           return Promise.resolve()
         }
         resolve({
+          baseUrl,
           close,
           reset,
           writeFiles,
