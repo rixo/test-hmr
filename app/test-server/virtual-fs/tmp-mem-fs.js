@@ -1,7 +1,6 @@
 // A memory fs that can be blanked out
 
 const path = require('path')
-const glob = require('fast-glob')
 
 const MemoryFS = require('memory-fs')
 
@@ -19,25 +18,17 @@ const tmpMemFs = ({ srcDir }) => {
     })
 
   const reset = async files => {
-    const sourceFiles = await glob(path.join(srcDir, '**/*'))
-    const changes = new Set(sourceFiles)
-
     tmpfs = new MemoryFS()
 
     if (files) {
-      await Promise.all(
+      return Promise.all(
         Object.entries(files).map(([path, contents]) =>
           writeFile(tmpfs, path, contents)
         )
-      ).then(paths => {
-        paths.forEach(path => {
-          changes.add(path)
-        })
-        return paths
-      })
+      )
     }
 
-    return [...changes]
+    return []
   }
 
   tmpfs = new MemoryFS()
