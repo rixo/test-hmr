@@ -131,7 +131,7 @@ describe.only('test utils: testHmr', () => {
     })
   })
 
-  describe('yield init(...)', () => {
+  describe('yield init({...})', () => {
     hit('configures initial files', function*() {
       yield init({
         'main.js': 'console.log("I am main.js")',
