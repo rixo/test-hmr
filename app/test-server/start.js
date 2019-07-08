@@ -24,7 +24,11 @@ const baseUrl = `${PROTOCOL}://${HOST}:${PORT}`
 const inSrc = file =>
   file ? path.join(APP, 'src', file) : path.join(APP, 'src')
 
-const createOnEmit = compiler => {
+// --- HMR control server ---
+
+const asyncNoop = async () => {}
+
+const emitWatcher = compiler => {
   const listeners = []
 
   compiler.hooks.afterEmit.tap('svelte HMR test suite', () => {
@@ -42,79 +46,80 @@ const createOnEmit = compiler => {
   return onEmit
 }
 
-// --- HMR control server ---
+const start = async () => {
+  const compiler = webpack(config)
 
-const start = () =>
-  new Promise((resolve, reject) => {
-    const compiler = webpack(config)
-
-    const vfs = virtualFs({
-      srcDir: SRC,
-    })
-
-    compiler.inputFileSystem = vfs
-    compiler.outputFileSystem = vfs.out
-    compiler.watchFileSystem = vfs
-
-    const onEmit = createOnEmit(compiler)
-
-    const writeFile = (filePath, contents) =>
-      new Promise((resolve, reject) => {
-        const srcPath = inSrc(filePath)
-        vfs.out.mkdirpSync(path.dirname(srcPath))
-        vfs.out.writeFile(srcPath, contents, 'utf8', err => {
-          if (err) reject(err)
-          else resolve(srcPath)
-        })
-      })
-
-    const writeFiles = async files => {
-      const paths = await Promise.all(
-        Object.entries(files).map(([path, contents]) =>
-          writeFile(path, contents)
-        )
-      )
-      await Promise.all([onEmit(), vfs.notify(paths)])
-    }
-
-    const reset = async files => {
-      await vfs.reset(files)
-      return onEmit()
-    }
-
-    const server = new WebpackDevServer(compiler, {
-      contentBase: path.join(APP, 'public'),
-      public: baseUrl,
-      publicPath: '/',
-      inline: true,
-      hot: true,
-      stats: 'errors-warnings',
-      quiet: true,
-      before: app => {
-        app.use(
-          RemoteControl({
-            writeFiles,
-            reset,
-          })
-        )
-      },
-    })
-
-    server.listen(PORT, HOST, function(err) {
-      if (err) reject(err)
-      else {
-        const close = () => {
-          server.close()
-          return Promise.resolve()
-        }
-        resolve({
-          baseUrl,
-          close,
-          reset,
-          writeFiles,
-        })
-      }
-    })
+  const vfs = virtualFs({
+    srcDir: SRC,
   })
+
+  compiler.inputFileSystem = vfs
+  compiler.outputFileSystem = vfs.out
+  compiler.watchFileSystem = vfs
+
+  const onEmit = emitWatcher(compiler)
+
+  const writeFile = (filePath, contents) =>
+    new Promise((resolve, reject) => {
+      const srcPath = inSrc(filePath)
+      vfs.out.mkdirpSync(path.dirname(srcPath))
+      vfs.out.writeFile(srcPath, contents, 'utf8', err => {
+        if (err) reject(err)
+        else resolve(srcPath)
+      })
+    })
+
+  const writeFiles = async files => {
+    const paths = await Promise.all(
+      Object.entries(files).map(([path, contents]) => writeFile(path, contents))
+    )
+    await Promise.all([onEmit(), vfs.notify(paths)])
+  }
+
+  const reset = files => Promise.all([onEmit(), vfs.reset(files)])
+
+  const server = new WebpackDevServer(compiler, {
+    contentBase: path.join(APP, 'public'),
+    public: baseUrl,
+    publicPath: '/',
+    inline: true,
+    hot: true,
+    stats: {
+      maxModules: 50,
+      reasons: true,
+    },
+    quiet: true,
+    before: app => {
+      app.use(
+        RemoteControl({
+          writeFiles,
+          reset,
+        })
+      )
+    },
+  })
+
+  let close = async () => {
+    await server.close()
+    close = asyncNoop
+  }
+
+  const listen = () =>
+    new Promise((resolve, reject) => {
+      server.listen(PORT, HOST, function(err) {
+        if (err) reject(err)
+        else resolve()
+      })
+    })
+
+  await Promise.all([onEmit(), listen()])
+
+  return {
+    baseUrl,
+    close,
+    reset,
+    writeFiles,
+  }
+}
 
 module.exports = start

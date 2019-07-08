@@ -11,8 +11,7 @@ const get = key => cache.get(key)
 const wrap = (fs, op) => (...args) => {
   const passthrough = args.slice(0, args.length - 1)
   const callback = args[args.length - 1]
-  passthrough.forEach(arg => assert.equal(typeof arg, 'string'))
-  const key = `${op}:${passthrough.join('📎')}`
+  const key = `${op}:${passthrough.map(JSON.stringify).join(',')}`
   const cached = get(key)
 
   if (cached) {

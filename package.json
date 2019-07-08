@@ -15,6 +15,7 @@
     "chai-spies": "^1.0.0",
     "dedent": "^0.7.0",
     "express": "^4.17.1",
+    "fast-glob": "^3.0.4",
     "glob": "^7.1.4",
     "linkfs": "^2.1.0",
     "memory-fs": "^0.4.1",

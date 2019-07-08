@@ -1,48 +1,53 @@
 // A memory fs that can be blanked out
 
 const path = require('path')
+const glob = require('fast-glob')
 
 const MemoryFS = require('memory-fs')
 
 const tmpMemFs = ({ srcDir }) => {
-  let mfsTarget
+  let tmpfs
 
   const writeFile = (fs, filePath, contents) =>
     new Promise((resolve, reject) => {
-      const srcPath = path.join(srcDir, filePath)
-      fs.mkdirpSync(path.dirname(srcPath))
-      fs.writeFile(srcPath, contents, 'utf8', err => {
+      const absPath = path.join(srcDir, filePath)
+      fs.mkdirpSync(path.dirname(absPath))
+      fs.writeFile(absPath, contents, 'utf8', err => {
         if (err) reject(err)
-        else resolve(srcPath)
+        else resolve(absPath)
       })
     })
 
-  // async, might become in the future
   const reset = async files => {
-    mfsTarget = new MemoryFS()
-    // FIXME changes detection should be implemented correctly: this is
-    //   probably the root cause of stability issues with reset
-    const changes = [`${srcDir}/main.js`, `${srcDir}/App.svelte`]
+    const sourceFiles = await glob(path.join(srcDir, '**/*'))
+    const changes = new Set(sourceFiles)
+
+    tmpfs = new MemoryFS()
+
     if (files) {
       await Promise.all(
         Object.entries(files).map(([path, contents]) =>
-          writeFile(mfsTarget, path, contents)
+          writeFile(tmpfs, path, contents)
         )
       ).then(paths => {
-        changes.push(...paths)
+        paths.forEach(path => {
+          changes.add(path)
+        })
+        return paths
       })
     }
-    return changes
+
+    return [...changes]
   }
 
-  reset()
+  tmpfs = new MemoryFS()
 
-  const mfs = new Proxy(mfsTarget, {
+  const mfs = new Proxy(tmpfs, {
     get(target, key) {
-      if (key === 'nuke') {
+      if (key === 'reset') {
         return reset
       }
-      return mfsTarget[key]
+      return tmpfs[key]
     },
   })
 

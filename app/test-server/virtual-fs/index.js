@@ -2,23 +2,33 @@
 // https://github.com/webpack/webpack/issues/1562#issuecomment-354878322
 
 const fs = require('fs')
+const path = require('path')
 
 const { Union } = require('unionfs')
-// const { link } = require('linkfs')
+const glob = require('fast-glob')
 
 const cacheFS = require('./cache-fs')
 const tmpMemFS = require('./tmp-mem-fs')
 
 const cached = cacheFS(fs)
 
-function VirtualFs({ srcDir }) {
-  const mfs = tmpMemFS({ srcDir })
-  const ufs = new Union().use(cached).use(mfs)
+const flatten = array =>
+  array.reduce((flat, cur) => flat.concat(Array.isArray(cur) ? cur : [cur]), [])
 
-  let notify
-  let times = {}
+function Watcher({ times }) {
+  let paused
+  let watcher
 
-  ufs.watch = (
+  const close = () => {
+    watcher = null
+  }
+
+  const pause = () => {
+    paused = true
+    throw new Error('pause')
+  }
+
+  const watch = (
     filePathsBeingWatched,
     dirPaths,
     missing,
@@ -27,7 +37,57 @@ function VirtualFs({ srcDir }) {
     aggregatedCallback,
     immediateCallback
   ) => {
-    let listening = true
+    paused = false
+    watcher = {
+      filePathsBeingWatched,
+      dirPaths,
+      missing,
+      startTime,
+      aggregatedCallback,
+      immediateCallback,
+    }
+    return {
+      close,
+      pause,
+    }
+  }
+
+  const notify = paths => {
+    const now = Date.now()
+
+    paths.forEach(path => {
+      times[path] = now
+    })
+
+    if (!watcher) {
+      return
+    }
+    if (paused) return
+
+    const {
+      filePathsBeingWatched,
+      dirPaths,
+      missing,
+      startTime,
+      aggregatedCallback,
+      immediateCallback,
+    } = watcher
+
+    paths.forEach(path => {
+      immediateCallback(path, now)
+    })
+
+    const err = null
+
+    const filesModified = paths
+      .filter(filePath => filePathsBeingWatched.indexOf(filePath) >= 0)
+      .sort()
+    const contextModified = paths
+      .filter(filePath => dirPaths.indexOf(filePath) >= 0)
+      .sort()
+    const missingModified = paths
+      .filter(filePath => missing.indexOf(filePath) >= 0)
+      .sort()
 
     const timestamps = {
       get: path => {
@@ -35,75 +95,65 @@ function VirtualFs({ srcDir }) {
       },
     }
 
-    notify = paths => {
-      if (!listening) return
-      const now = Date.now()
+    const fileTimestamps = timestamps
+    const contextTimestamps = timestamps
+    const removedFiles = []
 
-      paths.forEach(path => {
-        times[path] = now
-      })
-
-      paths.forEach(path => {
-        immediateCallback(path, now)
-      })
-
-      const err = null
-
-      const filesModified = paths
-        .filter(filePath => filePathsBeingWatched.indexOf(filePath) >= 0)
-        .sort()
-      const contextModified = paths
-        .filter(filePath => dirPaths.indexOf(filePath) >= 0)
-        .sort()
-      const missingModified = paths
-        .filter(filePath => missing.indexOf(filePath) >= 0)
-        .sort()
-
-      const fileTimestamps = timestamps
-      const contextTimestamps = timestamps
-      const removedFiles = []
-
-      aggregatedCallback(
-        err,
-        filesModified,
-        contextModified,
-        missingModified,
-        fileTimestamps,
-        contextTimestamps,
-        removedFiles
-      )
-    }
-
-    const pause = () => {
-      listening = false
-    }
-
-    const close = pause
-
-    return {
-      close,
-      pause,
-    }
+    aggregatedCallback(
+      err,
+      filesModified,
+      contextModified,
+      missingModified,
+      fileTimestamps,
+      contextTimestamps,
+      removedFiles
+    )
   }
 
-  ufs._writeVirtualFile = (file, stats, contents) => {
+  return {
+    watch,
+    notify,
+  }
+}
+
+function VirtualFs({ srcDir }) {
+  const mfs = tmpMemFS({ srcDir })
+  const ufs = new Union().use(cached).use(mfs)
+
+  const times = {}
+
+  const { watch, notify } = Watcher({ times })
+
+  const _writeVirtualFile = (file, stats, contents) => {
     mfs.writeFileSync(file, contents, 'utf8')
     times[file] = stats.mtime
   }
 
-  ufs.out = mfs
+  const allSourceFiles = fs => glob(path.join(srcDir, '**/*'), { fs })
 
-  ufs.notify = (...args) => notify(...args)
+  const fixtureFiles = allSourceFiles(cached)
 
-  ufs.reset = async files => {
-    const changes = await mfs.nuke(files)
-    times = {}
+  const reset = async files => {
+    const allChanges = await Promise.all([
+      fixtureFiles,
+      allSourceFiles(mfs).then(async oldFiles => {
+        const newFiles = await mfs.reset(files)
+        return [...oldFiles, ...newFiles]
+      }),
+    ])
+    const changes = flatten(allChanges)
     if (notify) {
       await notify(changes)
     }
   }
 
-  return ufs
+  return Object.assign(ufs, {
+    out: mfs,
+    watch,
+    notify,
+    reset,
+    _writeVirtualFile,
+  })
 }
 
 module.exports = VirtualFs
