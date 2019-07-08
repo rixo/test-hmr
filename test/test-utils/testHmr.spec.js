@@ -10,7 +10,7 @@ const {
 
 const noop = () => {}
 
-describe.only('test utils: testHmr', () => {
+describe('test utils: testHmr', () => {
   let _it
   let reset
   let writeHmr
@@ -140,10 +140,10 @@ describe.only('test utils: testHmr', () => {
     })
   })
 
-  describe.only('yield spec("string")', () => {
+  describe('yield spec("string")', () => {
     hit('registers simple specs with shortcut', function*() {
       yield spec(`
-        ==== ether ====
+        ---- ether ----
         I just am.
       `)
       const ether = `
@@ -159,9 +159,9 @@ describe.only('test utils: testHmr', () => {
 
     hit('registers multiple specs with shortcut', function*() {
       yield spec(`
-        ==== first ====
+        ---- first ----
         I am just above.
-        ==== second ====
+        ---- second ----
         I am just bellow.
       `)
       const first = `
@@ -182,11 +182,11 @@ describe.only('test utils: testHmr', () => {
 
     hit('can be called multiple times (before init)', function*() {
       yield spec(`
-        ==== first ====
+        ---- first ----
         I am just above.
       `)
       yield spec(`
-        ==== second ====
+        ---- second ----
         I am just bellow.
       `)
       const first = `
@@ -208,11 +208,11 @@ describe.only('test utils: testHmr', () => {
 
     hit('parses single line conditions', function*() {
       yield spec(`
-        ==== foo.js ====
+        ---- foo.js ----
         top
-        #0 on 0
+        :0 on 0
         middle
-        #1 on 1
+        :1 on 1
         bottom
       `)
       const foo0 = `
@@ -236,27 +236,72 @@ describe.only('test utils: testHmr', () => {
       })
     })
 
-    hit.skip('parses muliline conditions', function*() {
+    hit('parses muliline conditions', function*() {
       yield spec(`
-        ==== foo.js ====
+        ---- first ----
+        I am just above.
+        ---- foo.js ----
         top
-        #0 {
+        :0 on 000
+        middle
+        :1 {
           function foo() { console.log('bar') }
         }
+        bottom
+        ---- second ----
+        I am just bellow.
+      `)
+      const first = `
+        I am just above.`
+      const second = `
+        I am just bellow.
+      `
+      const foo0 = `
+        top
+        on 000
         middle
-        #1 on 1
+        bottom`
+      const foo1 = `
+        top
+        middle
+          function foo() { console.log('bar') }
+        bottom`
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        first: {
+          '*': first,
+        },
+        second: {
+          '*': second,
+        },
+        'foo.js': {
+          0: foo0,
+          1: foo1,
+        },
+      })
+    })
+
+    hit('lets mix all styles for maximum expressivity', function*() {
+      yield spec(`
+        ---- foo.js ----
+        top
+        :0 on 000
+        middle
+        :1 {
+          function foo() { console.log('bar') }
+        }
         bottom
       `)
       const foo0 = `
         top
-          function foo() { console.log('bar') }
+        on 000
         middle
         bottom
       `
       const foo1 = `
         top
         middle
-        on 1
+          function foo() { console.log('bar') }
         bottom
       `
       const state = yield debug()

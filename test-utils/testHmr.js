@@ -93,17 +93,32 @@ const parseSpecObject = (state, specs) =>
   )
 
 const parseSpecString = (() => {
-  const nameRegex = /^\s*====\s*([^=\s]+)(?:\s*====\s*)?$/
+  const nameRegex = /^\s*----\s*([^-\s]+)(?:\s*-*\s*)?$/
 
   const emptyRegex = /^\s*$/
 
   const isEmpty = emptyRegex.test.bind(emptyRegex)
 
-  const condRegex = /^(\s*)#([^\s+])\s+(.*)$/
+  const condRegex = /^(\s*):([^\s+])\s+(.*)$/
 
-  const parseConditions = lines => {
+  const parseConditions = (lines, source) => {
     const leading = []
     const conditions = {}
+
+    let currentLabel
+    let currentIndent
+    let currentBranch
+
+    const pushLine = line => {
+      if (currentBranch) {
+        currentBranch.push(line)
+      } else {
+        leading.push(line)
+        Object.values(conditions).forEach(cond => {
+          cond.push(line)
+        })
+      }
+    }
 
     const getCondition = label => {
       let cond = conditions[label]
@@ -114,21 +129,70 @@ const parseSpecString = (() => {
       return cond
     }
 
-    const pushLine = line => {
-      leading.push(line)
-      Object.values(conditions).forEach(cond => {
-        cond.push(line)
+    const openBranch = (label, content) => {
+      if (currentBranch) {
+        throw new Error(
+          'Invalid specs (only supports one conditional level): ' + source
+        )
+      }
+      currentLabel = label
+      currentIndent = 1
+      currentBranch = []
+      if (!isEmpty(content)) {
+        parseBranchLine(content)
+      }
+    }
+
+    const closeBranch = () => {
+      const cond = getCondition(currentLabel)
+      cond.push(...currentBranch)
+      currentBranch = null
+    }
+
+    const parseBranchLine = line => {
+      const closed = line.split('').some((char, i) => {
+        if (char === '{') {
+          currentIndent++
+        } else if (char === '}') {
+          currentIndent--
+        }
+        if (currentIndent === 0) {
+          const left = line.substr(0, i)
+          if (!isEmpty(left)) {
+            currentBranch.push(left)
+          }
+          closeBranch()
+          const right = line.substr(i + 1)
+          if (!isEmpty(right)) {
+            pushLine(right)
+          }
+          return true
+        }
       })
+      if (!closed) {
+        currentBranch.push(line)
+      }
     }
 
     lines.forEach(line => {
+      // guard: inside a conditional branch
+      if (currentBranch) {
+        parseBranchLine(line)
+        return
+      }
       const condMatch = condRegex.exec(line)
-      if (condMatch) {
-        const [, indent, label, content] = condMatch
+      if (!condMatch) {
+        pushLine(line)
+        return
+      }
+      const [, indent, label, content] = condMatch
+      if (content[0] === '{') {
+        // multi line condition
+        openBranch(label, indent + content.substr(1))
+      } else {
+        // single line condition
         const condition = getCondition(label)
         condition.push(indent + content)
-      } else {
-        pushLine(line)
       }
     })
 
@@ -155,7 +219,7 @@ const parseSpecString = (() => {
     let currentLines
 
     const endFile = () => {
-      result[currentFile] = parseConditions(currentLines)
+      result[currentFile] = parseConditions(currentLines, specs)
     }
 
     const maybeEndFile = () => {
@@ -295,9 +359,9 @@ const testHmr = createTestHmr()
 // for testing of testHmr itself
 testHmr.create = createTestHmr
 
-testHmr.skip = createTestHmr({ test: it.skip })
+testHmr.skip = createTestHmr({ it: it.skip })
 
-testHmr.only = createTestHmr({ test: it.only })
+testHmr.only = createTestHmr({ it: it.only })
 
 // === Effects ===
 
