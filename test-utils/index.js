@@ -11,8 +11,10 @@ const { writeFiles, reset } = rcUtils
 const hmrReadyMessage = '[WDS] Hot Module Replacement enabled.'
 const hmrDoneMessage = '[HMR] App is up to date.'
 
+const getInnerText = el => el.innerText
+
 const innerText = async (page, selector) => {
-  return page.$eval(selector, el => el.innerText)
+  return page.$eval(selector, getInnerText)
 }
 
 // NOTE HMR client is _not_ ready when page load event fires, we have to
