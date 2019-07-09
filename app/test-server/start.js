@@ -59,15 +59,21 @@ const start = async () => {
 
   const onEmit = emitWatcher(compiler)
 
-  const writeFile = (filePath, contents) =>
-    new Promise((resolve, reject) => {
-      const srcPath = inSrc(filePath)
-      vfs.out.mkdirpSync(path.dirname(srcPath))
-      vfs.out.writeFile(srcPath, contents, 'utf8', err => {
-        if (err) reject(err)
-        else resolve(srcPath)
+  const writeFile = (filePath, contents) => {
+    const srcPath = inSrc(filePath)
+    if (contents && contents.rm) {
+      // TODO implment delete (not easy with current virtual fs layout)
+      return Promise.resolve(srcPath)
+    } else {
+      return new Promise((resolve, reject) => {
+        vfs.out.mkdirpSync(path.dirname(srcPath))
+        vfs.out.writeFile(srcPath, contents, 'utf8', err => {
+          if (err) reject(err)
+          else resolve(srcPath)
+        })
       })
-    })
+    }
+  }
 
   const writeFiles = async files => {
     const paths = await Promise.all(

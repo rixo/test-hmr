@@ -26,31 +26,41 @@ describe('test utils: testHmr', () => {
       $eval: sinon.fake(),
     }
     loadPage = sinon.fake(async (url, callback) => callback(page))
-    _testHmr = (title, handler) =>
+    _testHmr = (title, handler, customizer) =>
       new Promise((resolve, reject) => {
         _it = sinon.fake(function(desc, handler) {
+          const scope = { slow: noop }
           return handler
-            .call({ slow: noop })
+            .call(scope)
             .then(resolve)
             .catch(reject)
         })
-        const testHmr = createTestHmr({
+        let options = {
           it: _it,
           reset,
           writeHmr,
           loadPage,
-        })
+        }
+        if (customizer) {
+          options = customizer(options)
+        }
+        const testHmr = createTestHmr(options)
         return testHmr(title, handler)
       })
   })
 
   // h[mr, ]it...
-  const hit = (title, handler, _it = it) =>
+  const makeHit = (title, handler, customizer, _it = it) =>
     _it(title, () => {
-      return _testHmr(title, handler)
+      return _testHmr(title, handler, customizer)
     })
-  hit.only = (title, handler) => hit(title, handler, it.only)
-  hit.skip = (title, handler) => hit(title, handler, it.skip)
+  const hit = (title, handler) => makeHit(title, handler, null, it)
+  hit.only = (title, handler) => makeHit(title, handler, null, it.only)
+  hit.skip = (title, handler) => makeHit(title, handler, null, it.skip)
+  // custom
+  // hit.browser: doesn't mock browser
+  hit.browser = (title, handler) =>
+    makeHit(title, handler, ({ it }) => ({ it }), it)
 
   hit("wraps mocha's it", function*() {
     expect(_it).to.have.been.calledOnce
@@ -119,7 +129,7 @@ describe('test utils: testHmr', () => {
   })
 
   describe('yield spec({...})', () => {
-    hit('registers full specs', function*() {
+    hit('can registers file specs', function*() {
       yield spec({ foo: 'FOO', bar: { 0: 'BAR' } })
       const state = yield debug()
       expect(state.specs).to.deep.equal({
@@ -210,11 +220,16 @@ describe('test utils: testHmr', () => {
       yield spec(`
         ---- foo.js ----
         top
-        :0 on 0
+        ::0 on 0
         middle
-        :1 on 1
+        ::1 on 1
         bottom
       `)
+      const fooAny = `
+        top
+        middle
+        bottom
+      `
       const foo0 = `
         top
         on 0
@@ -230,6 +245,7 @@ describe('test utils: testHmr', () => {
       const state = yield debug()
       expect(state.specs).to.deep.equal({
         'foo.js': {
+          '*': fooAny,
           0: foo0,
           1: foo1,
         },
@@ -242,9 +258,9 @@ describe('test utils: testHmr', () => {
         I am just above.
         ---- foo.js ----
         top
-        :0 on 000
+        ::0 on 000
         middle
-        :1 {
+        ::1 {
           function foo() { console.log('bar') }
         }
         bottom
@@ -256,6 +272,10 @@ describe('test utils: testHmr', () => {
       const second = `
         I am just bellow.
       `
+      const fooAny = `
+        top
+        middle
+        bottom`
       const foo0 = `
         top
         on 000
@@ -275,6 +295,7 @@ describe('test utils: testHmr', () => {
           '*': second,
         },
         'foo.js': {
+          '*': fooAny,
           0: foo0,
           1: foo1,
         },
@@ -285,13 +306,18 @@ describe('test utils: testHmr', () => {
       yield spec(`
         ---- foo.js ----
         top
-        :0 on 000
+        ::0 on 000
         middle
-        :1 {
+        ::1 {
           function foo() { console.log('bar') }
         }
         bottom
       `)
+      const fooAny = `
+        top
+        middle
+        bottom
+      `
       const foo0 = `
         top
         on 000
@@ -307,10 +333,232 @@ describe('test utils: testHmr', () => {
       const state = yield debug()
       expect(state.specs).to.deep.equal({
         'foo.js': {
+          '*': fooAny,
           0: foo0,
           1: foo1,
         },
       })
+    })
+  })
+
+  describe('yield spec.expect(...)', () => {
+    hit('accepts two args', function*() {
+      yield spec.expect(0, '<p>foo</p>')
+      yield spec.expect(1, 'Babar')
+      const state = yield debug()
+      expect([...state.expects]).to.deep.equal([
+        ['0', '<p>foo</p>'],
+        ['1', 'Babar'],
+      ])
+      yield spec.discard()
+    })
+
+    hit('accepts a single array arg', function*() {
+      yield spec.expect([[0, '<p>foo</p>'], [1, 'Babar']])
+      const state = yield debug()
+      expect([...state.expects]).to.deep.equal([
+        ['0', '<p>foo</p>'],
+        ['1', 'Babar'],
+      ])
+      yield spec.discard()
+    })
+
+    // helps with maintaining a sane formatting with prettier
+    hit('can be used as a template literal tag', function*() {
+      yield spec.expect(0)`
+        <p>foo</p>
+      `
+      yield spec.expect(1)`
+        Babar
+      `
+      const state = yield debug()
+      expect([...state.expects]).to.deep.equal([
+        ['0', '<p>foo</p>'],
+        ['1', 'Babar'],
+      ])
+      yield spec.discard()
+    })
+
+    hit('compiles expectations on first non-init effect', function*() {
+      yield spec.expect(0, '<p>foo</p>')
+      {
+        const state = yield debug()
+        expect(state.remainingExpects).to.be.undefined
+      }
+      yield innerText('*')
+      {
+        const state = yield debug()
+        expect(state.remainingExpects).to.deep.equal([['0', '<p>foo</p>']])
+      }
+      yield spec.discard()
+    })
+
+    hit('crashes when init not on the first expectation step', function*() {
+      yield spec.expect(0, sinon.fake())
+      yield spec.expect(1, sinon.fake())
+      let initError
+      let after = false
+      try {
+        yield init(1)
+        yield innerText('*')
+        // ensures controller stop yielding after throw
+        after = true
+        yield innerText('*')
+      } catch (err) {
+        initError = err
+      }
+      expect(initError).not.to.be.undefined
+      expect(after).to.be.false
+    })
+
+    hit('runs expectations for steps that are activated manually', function*() {
+      const expects = {
+        0: sinon.fake(),
+        1: sinon.fake(),
+      }
+      yield spec.expect(0, expects[0])
+      yield spec.expect(1, expects[1])
+      // flow
+      expect(expects[0], '-0.0').not.to.have.been.called
+      yield change(0)
+      expect(expects[0], '0.0').to.have.been.calledOnce
+      expect(expects[1], '0.1').not.to.have.been.called
+      yield change(1)
+      expect(expects[1], '1.1').to.have.been.calledOnce
+    })
+
+    hit('runs skipped expectations', function*() {
+      const expects = {
+        0: sinon.fake(),
+        1: sinon.fake(),
+        2: sinon.fake(),
+        3: sinon.fake(),
+      }
+      yield spec.expect(0, expects[0])
+      yield spec.expect(1, expects[1])
+      yield spec.expect(2, expects[2])
+      yield spec.expect(3, expects[3])
+
+      yield init(0)
+      expect(expects[1], '-0.0').not.to.have.been.called
+      // 0
+      yield innerText('*')
+      expect(expects[0], '0.0').to.have.been.calledOnce
+      expect(expects[1], '0.1').not.to.have.been.called
+      expect(expects[2], '0.2').not.to.have.been.called
+      // 1, 2
+      yield change(2) // <- NOTE skips 1
+      expect(expects[0], '1.0').to.have.been.calledOnce
+      expect(expects[1], '1.1').to.have.been.calledOnce
+      expect(expects[2], '1.2').to.have.been.calledOnce
+      // 3
+      expect(expects[3], '2.3').not.to.have.been.called
+    })
+
+    it('flushes remaining steps when generator returns', async () => {
+      const expects = {
+        0: sinon.fake(),
+        1: sinon.fake(),
+        2: sinon.fake(),
+        3: sinon.fake(),
+      }
+
+      await _testHmr('kitchen sink', function*() {
+        yield spec.expect(0, expects[0])
+        yield spec.expect(1, expects[1])
+        yield spec.expect(2, expects[2])
+        yield spec.expect(3, expects[3])
+
+        yield init(0)
+        expect(expects[1], '-0.0').not.to.have.been.called
+        // 0
+        // yield innerText('*')
+        // expect(expects[0], '0.0').to.have.been.calledOnce
+        expect(expects[1], '0.1').not.to.have.been.called
+        expect(expects[2], '0.2').not.to.have.been.called
+        // 1, 2
+        yield change(2)
+        expect(expects[0], '1.0').to.have.been.calledOnce
+        expect(expects[1], '1.1').to.have.been.calledOnce
+        expect(expects[2], '1.2').to.have.been.calledOnce
+        // 3
+        expect(expects[3], '2.3').not.to.have.been.called
+      })
+
+      expect(expects[3], '3.3').to.have.been.calledOnce
+    })
+
+    it('flushes all steps if generator returns during init phase', async () => {
+      const expects = {
+        0: sinon.fake(),
+      }
+      await _testHmr('kitchen sink', function*() {
+        yield spec.expect(0, expects[0])
+        expect(expects[0]).not.to.have.been.called
+      })
+      expect(expects[0]).to.have.been.calledOnce
+    })
+  })
+
+  describe('yield spec.expect: string expectations', () => {
+    hit.browser('matches full result content', function*() {
+      yield spec(`
+        ---- App.svelte ----
+        <script>
+          import Child from './Child'
+        </script>
+        <Child name="Kild" />
+        ---- Child.svelte ----
+        <script>
+          export let name
+        </script>
+        <h2>{name}: I am expected</h2>
+      `)
+      yield spec.expect(
+        0,
+        `
+          <h2>Kild: I am expected</h2>
+        `
+      )
+    })
+
+    hit.browser(
+      'collapses white spaces between tags to match HTML',
+      function*() {
+        yield spec(`
+          ---- App.svelte ----
+          <h1>I  am  title</h1>
+          <p> I'm&nbsp;&nbsp;   paragraph <span>  I am   spanning</span>
+            </p>
+        `)
+        yield spec.expect(0)`
+          <h1>I am title</h1>
+          <p>
+            I'm&nbsp;&nbsp; paragraph <span>I am spanning</span>
+          </p>
+        `
+      }
+    )
+
+    hit.browser('matches full result content in all conditions', function*() {
+      yield spec(`
+        ---- App.svelte ----
+        <script>
+          import Child from './Child'
+        </script>
+        <Child name="Kild" />
+        ::2 <p>oooO   oOoo</p>
+        ---- Child.svelte ----
+        <script>
+          export let name
+        </script>
+        ::0 <h2>{name}: I am expected</h2>
+        ::1 <h1>I am {name}</h1>
+        ::2 <h1>I am {name}</h1>
+      `)
+      yield spec.expect(0, `<h2>Kild: I am expected</h2>`)
+      yield spec.expect(1, `<h1>I am Kild</h1>`)
+      yield spec.expect(2, `<h1>I am Kild</h1> <p>oooO   oOoo</p>`)
     })
   })
 

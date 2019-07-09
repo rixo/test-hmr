@@ -1,13 +1,20 @@
 /* eslint-env mocha */
 
+const assert = require('assert')
+
 const { writeHmr, loadPage } = require('.')
 
 const INIT = 'init'
 const TEMPLATES = 'templates'
 const SPEC = 'specs'
+const EXPECT = 'expect'
+const FLUSH_EXPECTS = 'flush_expects'
+const DISCARD_EXPECTS = 'discard_expects'
 const CHANGE = 'changes'
 const INNER_TEXT = 'inner_text'
 const DEBUG = 'debug'
+
+const nullLabel = Symbol('NULL LABEL')
 
 const consume = async (gen, callback, firstValue) => {
   let next
@@ -17,26 +24,14 @@ const consume = async (gen, callback, firstValue) => {
     nextValue = undefined
     const value = next.value
     if (!value) continue
-    nextValue = await callback(value)
+    try {
+      nextValue = await callback(value)
+    } catch (err) {
+      gen.throw(err)
+    }
   } while (!next.done)
 }
 
-// accepts templates as initial file content; templates are also rendered
-// with `undefined` as only argument, and included into initial files (inits)
-//
-// yield init({
-//   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
-// })
-//
-// equivalent to:
-//
-// yield templates({
-//   'App.svelte': (slot = 'World') => `<h1>Hello, ${slot}!</h1>`
-// })
-// yield init({
-//   'App.svelte': undefined
-// })
-//
 const initChanges = (state, { inits }) => {
   // support for spec-change `init(0)`
   if (typeof inits !== 'object') {
@@ -54,10 +49,7 @@ const initChanges = (state, { inits }) => {
   return changes
 }
 
-const renderFiles = (state, changes, rm) => {
-  if (typeof changes === 'string' || typeof changes === 'number') {
-    return renderSpecs(state, changes, rm)
-  }
+const renderChanges = (state, changes) => {
   const { templates } = state
   return Object.fromEntries(
     Object.entries(changes).map(([key, value]) => {
@@ -78,12 +70,116 @@ const renderSpecs = ({ specs }, spec, rm = change.rm) =>
       .filter(([, step]) => !!step)
   )
 
+const ensureFirstExpect = (state, label) => {
+  const { remainingExpects } = state
+  if (!remainingExpects || !remainingExpects.length) return
+  const [first] = remainingExpects
+  const [nextLabel] = first
+  if (nextLabel !== label) {
+    // null out remaining expects to prevent flushing them (and crashing again)
+    state.remainingExpects = null
+    const details = `expected: ${nextLabel}, found: ${label}`
+    throw new Error(`Must init with first step (${details})`)
+  }
+}
+
+const assertExpect = (() => {
+  const sanitizeHtml = require('sanitize-html')
+  const { expect } = require('chai')
+
+  // https://stackoverflow.com/a/40026669/1387519
+  const trimRegex = /(<(pre|script|style|textarea)[^]+?<\/\2)|(^|>)\s+|\s+(?=<|$)/g
+
+  const dedupSpaceRegex = / {2,}/g
+
+  const normalizeHtml = html => {
+    let result = sanitizeHtml(html, {
+      allowedTags: false,
+      allowedAttributes: false,
+      // selfClosing: false,
+      allowedSchemes: false,
+      allowedSchemesByTag: false,
+      allowedSchemesAppliedToAttributes: false,
+    })
+    result = result.replace(trimRegex, '$1$3')
+    result = result.replace(dedupSpaceRegex, ' ')
+    return result
+  }
+
+  return async (state, expectation) => {
+    if (typeof expectation === 'function') {
+      await expectation()
+    } else {
+      const { page } = state
+      const APP_ROOT_SELECTOR = '#app'
+      const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
+      const actual = normalizeHtml(contents)
+      const expected = normalizeHtml(expectation)
+      expect(actual).to.equal(expected)
+    }
+  }
+})()
+
+const consumeExpects = async (state, _untilLabel, alreadyWritten = false) => {
+  const {
+    config: { writeHmr },
+  } = state
+  const untilLabel = String(_untilLabel)
+  const { remainingExpects } = state
+  let lastLabel = nullLabel
+
+  if (!remainingExpects || !remainingExpects.length) {
+    return lastLabel
+  }
+
+  while (remainingExpects.length > 0) {
+    const next = remainingExpects.shift()
+    const [label, expect] = next
+
+    lastLabel = label
+
+    if (!alreadyWritten) {
+      // const files = renderSpecs(state, changes)
+      // await writeHmr(state.page, files)
+      const files = renderSpecs(state, label)
+      await writeHmr(state.page, files)
+    }
+
+    await assertExpect(state, expect)
+
+    if (label === untilLabel) {
+      return label
+    }
+  }
+
+  return lastLabel
+}
+
+const flushExpects = state => consumeExpects(state, nullLabel)
+
+const discardExpects = state => {
+  state.remainingExpects = null
+}
+
+const renderInitFiles = (state, changes) => {
+  if (typeof changes === 'string' || typeof changes === 'number') {
+    if (state.initSpecLabel) {
+      const previous = `previous: ${state.initSpecLabel}`
+      throw new Error(`init with a spec label (${previous})`)
+    } else {
+      state.initSpecLabel = String(changes)
+    }
+    return renderSpecs(state, changes, false)
+  }
+  return renderChanges(state, changes)
+}
+
 const processTemplates = (state, effect) => {
   Object.assign(state.templates, effect.templates)
 }
 
-const parseSpecObject = (state, specs) =>
-  Object.fromEntries(
+const parseSpecObject = (state, specs) => {
+  const result = Object.fromEntries(
     Object.entries(specs).map(([file, spec]) => {
       if (typeof spec === 'string') {
         return [file, { '*': spec }]
@@ -91,6 +187,23 @@ const parseSpecObject = (state, specs) =>
       return [file, spec]
     })
   )
+  return { specs: result }
+}
+
+const addExpects = (state, expects) => {
+  // guard: empty
+  if (!expects) return
+  expects.forEach(([label, expect]) => {
+    if (typeof expect === 'string') {
+      expect = expect.trim()
+    }
+    state.expects.set(String(label), expect)
+  })
+}
+
+const processExpect = (state, { expects }) => {
+  addExpects(state, expects)
+}
 
 const parseSpecString = (() => {
   const nameRegex = /^\s*----\s*([^-\s]+)(?:\s*-*\s*)?$/
@@ -99,7 +212,7 @@ const parseSpecString = (() => {
 
   const isEmpty = emptyRegex.test.bind(emptyRegex)
 
-  const condRegex = /^(\s*):([^\s+])\s+(.*)$/
+  const condRegex = /^(\s*)::([^\s+])\s+(.*)$/
 
   const parseConditions = (lines, source) => {
     const leading = []
@@ -196,19 +309,23 @@ const parseSpecString = (() => {
       }
     })
 
+    const result = {
+      '*': leading.join('\n'),
+    }
     // guard: no conditions
     if (Object.keys(conditions).length === 0) {
-      return {
-        '*': leading.join('\n'),
-      }
+      return result
     }
     // with conditions
-    return Object.fromEntries(
-      Object.entries(conditions).map(([file, lines]) => [
-        file,
-        lines.join('\n'),
-      ])
-    )
+    return {
+      ...result,
+      ...Object.fromEntries(
+        Object.entries(conditions).map(([file, lines]) => [
+          file,
+          lines.join('\n'),
+        ])
+      ),
+    }
   }
 
   return (state, specs) => {
@@ -254,14 +371,15 @@ const parseSpecString = (() => {
     // last file
     maybeEndFile()
 
-    return result
+    return { specs: result }
   }
 })()
 
 const processSpec = (state, { specs }) => {
   const parser = typeof specs === 'string' ? parseSpecString : parseSpecObject
   const result = parser(state, specs)
-  Object.assign(state.specs, result)
+  Object.assign(state.specs, result.specs)
+  addExpects(state, result.expects)
 }
 
 const initEffectProcessor = (state, start) => async effect => {
@@ -275,9 +393,12 @@ const initEffectProcessor = (state, start) => async effect => {
     case SPEC:
       return processSpec(state, effect)
 
+    case EXPECT:
+      return processExpect(state, effect)
+
     case INIT: {
       const changes = initChanges(state, effect)
-      const files = renderFiles(state, changes, false)
+      const files = renderInitFiles(state, changes)
       Object.assign(state.inits, files)
       break
     }
@@ -287,59 +408,106 @@ const initEffectProcessor = (state, start) => async effect => {
   }
 }
 
-const effectProcessor = (state, { writeHmr }) => async effect => {
-  switch (effect.type) {
-    case DEBUG:
-      return state
+const effectProcessor = state => {
+  const {
+    config: { writeHmr },
+  } = state
+  return async effect => {
+    switch (effect.type) {
+      case DEBUG:
+        return state
 
-    case TEMPLATES:
-      return processTemplates(state, effect)
+      case TEMPLATES:
+        return processTemplates(state, effect)
 
-    case CHANGE: {
-      const files = renderFiles(state, effect.changes)
-      await writeHmr(state.page, files)
-      break
+      case CHANGE: {
+        const { changes } = effect
+        if (typeof changes === 'string' || typeof changes === 'number') {
+          const lastLabel = await consumeExpects(state, changes)
+          // if our label has not been processed by consumeExpects (because
+          // not present as an expectation), then we must do it ourselves
+          if (lastLabel !== String(changes)) {
+            const files = renderSpecs(state, changes)
+            await writeHmr(state.page, files)
+          }
+        } else {
+          const files = renderChanges(state, changes)
+          await writeHmr(state.page, files)
+        }
+        break
+      }
+
+      case FLUSH_EXPECTS:
+        return flushExpects(state)
+
+      // allow bailing out, for testing
+      case DISCARD_EXPECTS:
+        return discardExpects(state)
+
+      case INNER_TEXT:
+        return await state.page.$eval(effect.selector, el => el && el.innerText)
     }
-
-    case INNER_TEXT:
-      return await state.page.$eval(effect.selector, el => el && el.innerText)
   }
 }
 
 const createTestHmr = (options = {}) => {
+  // config defaults
   const config = {
     it,
     loadPage,
+    // TODO remove dep on global
     reset: (...args) => app.reset(...args),
     writeHmr,
     ...options,
   }
+
   return (description, handler) => {
+    // resolve actual config
     const { it, reset, loadPage } = config
+
     return it(description, async function() {
       this.slow(1000)
 
       const gen = handler()
       const state = {
+        config,
         pageUrl: '/',
         templates: {},
         inits: {},
         specs: {},
+        expects: new Map(),
+        initSpecLabel: null,
       }
 
-      const processEffect = effectProcessor(state, config)
+      let started = false
 
-      // reset HRM sources & set initial source files
+      // init phase -> run phase
+      //
+      // reset HRM sources & set initial source files...
+      //
       const initTest = async () => {
         await reset(state.inits)
         delete state.inits // free mem
+
+        // compile expectations
+        state.remainingExpects = [...state.expects]
+
+        if (state.initSpecLabel !== null) {
+          ensureFirstExpect(state, state.initSpecLabel)
+          await consumeExpects(state, state.initSpecLabel, true)
+        }
       }
 
       const start = async firstEffect => {
+        started = true
+
+        const processEffect = effectProcessor(state)
+
         const inPage = async page => {
           state.page = page
           const firstValue = await processEffect(firstEffect)
           await consume(gen, processEffect, firstValue)
+          await flushExpects(state)
         }
 
         await initTest()
@@ -350,6 +518,10 @@ const createTestHmr = (options = {}) => {
       const processInitEffect = initEffectProcessor(state, start)
 
       await consume(gen, processInitEffect)
+
+      if (!started && state.expects.size > 0) {
+        await start(spec.flush())
+      }
     })
   }
 }
@@ -375,6 +547,35 @@ const templates = templates => ({
 const spec = specs => ({
   type: SPEC,
   specs,
+})
+
+spec.expect = (label, expects) => {
+  let payload
+  if (Array.isArray(label)) {
+    // yield spec.expect([[label, expect], ...])
+    assert(expects === undefined)
+    payload = label
+  } else if (expects === undefined) {
+    // used a a template literal tag
+    // TODO maybe should interpolate values?
+    return parts => spec.expect(label, parts.join(''))
+  } else {
+    // yield spec.expect(label, expect)
+    assert(expects != null)
+    payload = [[label, expects]]
+  }
+  return {
+    type: EXPECT,
+    expects: payload,
+  }
+}
+
+spec.flush = () => ({
+  type: FLUSH_EXPECTS,
+})
+
+spec.discard = () => ({
+  type: DISCARD_EXPECTS,
 })
 
 const innerText = selector => ({

@@ -18,9 +18,9 @@ describe('HMR (slots)', () => {
         }, 2500)
       </script>
 
-      :0 <Child />
+      ::0 <Child />
 
-      :1 <Child>I am Slot</Child>
+      ::1 <Child>I am Slot</Child>
 
       ---- Child.svelte ----
 
@@ -49,8 +49,8 @@ describe('HMR (slots)', () => {
       ---- Child.svelte ----
 
       <h2>
-        :0 <slot>I am Child</slot>
-        :1 I am Child
+        ::0 <slot>I am Child</slot>
+        ::1 I am Child
       </h2>
     `)
 
