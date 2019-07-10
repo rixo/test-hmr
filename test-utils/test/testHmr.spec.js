@@ -565,8 +565,13 @@ describe('test utils: testHmr', () => {
     })
   })
 
-  describeE2e('yield spec.expect: string expectations', () => {
-    hit.browser('matches full result content', function*() {
+  describe('yield spec.expect(int, string)', () => {
+    hit('matches full result content', function*() {
+      _page.$eval = sinon.fake(
+        async () => `
+          <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
+        `
+      )
       yield spec(`
         ---- App.svelte ----
         <script>
@@ -587,25 +592,44 @@ describe('test utils: testHmr', () => {
       )
     })
 
-    hit.browser(
-      'collapses white spaces between tags to match HTML',
-      function*() {
-        yield spec(`
+    hit('collapses white spaces between tags to match HTML', function*() {
+      _page.$eval = sinon.fake(
+        async () => `
+            <h1>I  am  title</h1>
+            <p>
+              I'm&nbsp;&nbsp;   paragraph <span>I am   spanning</span>
+            </p>
+            <!--<App>-->
+          `
+      )
+      yield spec(`
           ---- App.svelte ----
           <h1>I  am  title</h1>
           <p> I'm&nbsp;&nbsp;   paragraph <span>  I am   spanning</span>
             </p>
         `)
-        yield spec.expect(0)`
+      yield spec.expect(0)`
           <h1>I am title</h1>
           <p>
             I'm&nbsp;&nbsp; paragraph <span>I am spanning</span>
           </p>
         `
-      }
-    )
+    })
 
-    hit.browser('matches full result content in all conditions', function*() {
+    hit('matches full result content in all conditions', function*() {
+      const results = {
+        0: `
+          <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
+        `,
+        1: `
+          <h1>I am Kild</h1><!--<Child>--><!--<App>-->
+        `,
+        2: `
+          <h1>I am Kild</h1><!--<Child>--> <p>oooO   oOoo</p><!--<App>-->
+        `,
+      }
+      let i = 0
+      _page.$eval = sinon.fake(async () => results[i++])
       yield spec(`
         ---- App.svelte ----
         <script>
