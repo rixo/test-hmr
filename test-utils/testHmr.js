@@ -13,6 +13,7 @@ const EXPECT = 'expect'
 const FLUSH_EXPECTS = 'flush_expects'
 const DISCARD_EXPECTS = 'discard_expects'
 const CHANGE = 'changes'
+const PAGE = 'page'
 const INNER_TEXT = 'inner_text'
 const DEBUG = 'debug'
 
@@ -387,6 +388,14 @@ const processSpec = (state, { specs }) => {
   addExpects(state, result.expects)
 }
 
+const processPageProxy = (state, { method, args }) => {
+  if (method) {
+    return state.page[method](...args)
+  } else {
+    return state.page
+  }
+}
+
 const initEffectProcessor = (state, start) => async effect => {
   switch (effect.type) {
     case DEBUG:
@@ -450,6 +459,9 @@ const effectProcessor = state => {
       case DISCARD_EXPECTS:
         return discardExpects(state)
 
+      case PAGE:
+        return processPageProxy(state, effect)
+
       case INNER_TEXT:
         return await state.page.$eval(effect.selector, el => el && el.innerText)
     }
@@ -481,9 +493,8 @@ const createTestHmr = (options = {}) => {
         specs: {},
         expects: new Map(),
         initSpecLabel: null,
+        started: false,
       }
-
-      let started = false
 
       // init phase -> run phase
       //
@@ -503,7 +514,7 @@ const createTestHmr = (options = {}) => {
       }
 
       const start = async firstEffect => {
-        started = true
+        state.started = true
 
         const processEffect = effectProcessor(state)
 
@@ -523,7 +534,7 @@ const createTestHmr = (options = {}) => {
 
       await consume(gen, processInitEffect)
 
-      if (!started && state.expects.size > 0) {
+      if (!state.started && state.expects.size > 0) {
         await start(spec.flush())
       }
     })
@@ -595,6 +606,21 @@ spec.discard = () => ({
   type: DISCARD_EXPECTS,
 })
 
+const pageProxy = new Proxy(
+  () => ({
+    type: PAGE,
+  }),
+  {
+    get(target, prop) {
+      return (...args) => ({
+        type: PAGE,
+        method: prop,
+        args,
+      })
+    },
+  }
+)
+
 const innerText = selector => ({
   type: INNER_TEXT,
   selector,
@@ -613,10 +639,11 @@ const debug = () => ({ type: DEBUG })
 
 module.exports = {
   testHmr,
-  init,
-  templates,
-  spec,
-  innerText,
-  change,
   debug,
+  spec,
+  templates,
+  change,
+  init,
+  page: pageProxy,
+  innerText,
 }

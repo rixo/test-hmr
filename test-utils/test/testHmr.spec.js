@@ -6,6 +6,7 @@ const {
   debug,
   change,
   innerText,
+  page,
 } = require('../../test-utils/testHmr')
 
 const noop = () => {}
@@ -14,7 +15,7 @@ describe('test utils: testHmr', () => {
   let _it
   let reset
   let writeHmr
-  let page
+  let _page
   let loadPage
   let _testHmr
 
@@ -22,10 +23,10 @@ describe('test utils: testHmr', () => {
     _it = null
     reset = sinon.fake()
     writeHmr = sinon.fake(async () => {})
-    page = {
+    _page = {
       $eval: sinon.fake(),
     }
-    loadPage = sinon.fake(async (url, callback) => callback(page))
+    loadPage = sinon.fake(async (url, callback) => callback(_page))
     _testHmr = (title, handler, customizer) =>
       new Promise((resolve, reject) => {
         _it = sinon.fake(function(desc, handler) {
@@ -676,26 +677,26 @@ describe('test utils: testHmr', () => {
     hit('always includes string specs', function*() {
       yield spec({ always: 'ALWAYS' })
       yield change(0)
-      expect(writeHmr).to.have.been.calledWith(page, { always: 'ALWAYS' })
+      expect(writeHmr).to.have.been.calledWith(_page, { always: 'ALWAYS' })
     })
 
     hit('always includes * specs', function*() {
       yield spec({ always: { '*': 'ALWAYS' } })
       yield change(0)
-      expect(writeHmr).to.have.been.calledWith(page, { always: 'ALWAYS' })
+      expect(writeHmr).to.have.been.calledWith(_page, { always: 'ALWAYS' })
       yield change(1)
-      expect(writeHmr).to.have.been.calledWith(page, { always: 'ALWAYS' })
+      expect(writeHmr).to.have.been.calledWith(_page, { always: 'ALWAYS' })
     })
 
     hit('conditionnaly includes labeled specs', function*() {
       yield spec({ foo: { 0: 'FOO' }, bar: { 1: 'BAR' } })
       yield change(0)
-      expect(writeHmr).to.have.been.calledWith(page, {
+      expect(writeHmr).to.have.been.calledWith(_page, {
         foo: 'FOO',
         bar: change.rm,
       })
       yield change(1)
-      expect(writeHmr).to.have.been.calledWith(page, {
+      expect(writeHmr).to.have.been.calledWith(_page, {
         foo: change.rm,
         bar: 'BAR',
       })
@@ -722,6 +723,64 @@ describe('test utils: testHmr', () => {
       yield init(1)
       const state = yield debug()
       expect(state.inits).to.deep.equal({ bar: 'BAR' })
+    })
+  })
+
+  describe('yield page()', () => {
+    hit('returns the page instance', function*() {
+      const p = yield page()
+      expect(p).to.equal(_page)
+    })
+
+    hit('triggers init', function*() {
+      {
+        const { started } = yield debug()
+        expect(started).to.be.false
+      }
+      yield page()
+      {
+        const { started } = yield debug()
+        expect(started).to.be.true
+      }
+    })
+  })
+
+  describe('yield page[method](...args)', () => {
+    hit('proxies the method to the actual page instance', function*() {
+      yield page.$eval()
+      expect(_page.$eval).to.have.been.calledOnce
+    })
+
+    hit('passes arguments to the proxied method', function*() {
+      const a = {}
+      const b = {}
+      const c = {}
+      yield page.$eval(a, b, c)
+      expect(_page.$eval).to.have.been.calledWith(a, b, c)
+    })
+
+    hit('returns proxied method result', function*() {
+      _page.$eval = sinon.fake(() => 'yep')
+      const result = yield page.$eval()
+      expect(result).to.equal('yep')
+    })
+
+    hit('await async results', function*() {
+      _page.$eval = sinon.fake(async () => '... yep')
+      const result = yield page.$eval()
+      expect(result).to.equal('... yep')
+    })
+
+    hit('triggers init', function*() {
+      {
+        const { started } = yield debug()
+        expect(started).to.be.false
+      }
+      yield page.$eval()
+      {
+        const { started } = yield debug()
+        expect(started).to.be.true
+      }
     })
   })
 })
