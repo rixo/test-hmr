@@ -663,6 +663,29 @@ describe('test utils: testHmr', () => {
     })
   })
 
+  describe('yield init(spec)', () => {
+    hit('always includes string specs', function*() {
+      yield spec({ always: 'ALWAYS' })
+      yield init(0)
+      const state = yield debug()
+      expect(state.inits).to.deep.equal({ always: 'ALWAYS' })
+    })
+
+    hit('always includes * specs', function*() {
+      yield spec({ always: { '*': 'ALWAYS' } })
+      yield init(0)
+      const state = yield debug()
+      expect(state.inits).to.deep.equal({ always: 'ALWAYS' })
+    })
+
+    hit('conditionnaly includes labeled specs', function*() {
+      yield spec({ foo: { 0: 'FOO' }, bar: { 1: 'BAR' } })
+      yield init(1)
+      const state = yield debug()
+      expect(state.inits).to.deep.equal({ bar: 'BAR' })
+    })
+  })
+
   describe('yield change({...})', () => {
     hit('triggers app init', function*() {
       expect(loadPage).not.to.have.been.called
@@ -721,29 +744,6 @@ describe('test utils: testHmr', () => {
         foo: change.rm,
         bar: 'BAR',
       })
-    })
-  })
-
-  describe('yield init(spec)', () => {
-    hit('always includes string specs', function*() {
-      yield spec({ always: 'ALWAYS' })
-      yield init(0)
-      const state = yield debug()
-      expect(state.inits).to.deep.equal({ always: 'ALWAYS' })
-    })
-
-    hit('always includes * specs', function*() {
-      yield spec({ always: { '*': 'ALWAYS' } })
-      yield init(0)
-      const state = yield debug()
-      expect(state.inits).to.deep.equal({ always: 'ALWAYS' })
-    })
-
-    hit('conditionnaly includes labeled specs', function*() {
-      yield spec({ foo: { 0: 'FOO' }, bar: { 1: 'BAR' } })
-      yield init(1)
-      const state = yield debug()
-      expect(state.inits).to.deep.equal({ bar: 'BAR' })
     })
   })
 
