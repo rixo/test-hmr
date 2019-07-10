@@ -1,21 +1,12 @@
 /* eslint-env mocha */
 
-const assert = require('assert')
 const { expect } = require('chai')
 
 const { writeHmr, loadPage } = require('.')
 const normalizeHtml = require('./normalizeHtml')
 
-const INIT = 'init'
-const TEMPLATES = 'templates'
-const SPEC = 'specs'
-const EXPECT = 'expect'
-const FLUSH_EXPECTS = 'flush_expects'
-const DISCARD_EXPECTS = 'discard_expects'
-const CHANGE = 'changes'
-const PAGE = 'page'
-const INNER_TEXT = 'inner_text'
-const DEBUG = 'debug'
+const cmd = require('./testHmr.commands')
+const { commands } = cmd
 
 const nullLabel = Symbol('NULL LABEL')
 
@@ -63,7 +54,7 @@ const renderChanges = (state, changes) => {
   )
 }
 
-const renderSpecs = ({ specs }, spec, rm = change.rm) =>
+const renderSpecs = ({ specs }, spec, rm = commands.change.rm) =>
   Object.fromEntries(
     Object.entries(specs)
       .map(([path, fileSpec]) => {
@@ -398,20 +389,20 @@ const processPageProxy = (state, { method, args }) => {
 
 const initEffectProcessor = (state, start) => async effect => {
   switch (effect.type) {
-    case DEBUG:
+    case cmd.DEBUG:
       return state
 
-    case TEMPLATES:
+    case cmd.TEMPLATES:
       return processTemplates(state, effect)
 
-    case SPEC:
+    case cmd.SPEC:
       return processSpec(state, effect)
 
-    case EXPECT:
+    case cmd.EXPECT:
       addExpects(state, effect.expects)
       break
 
-    case INIT: {
+    case cmd.INIT: {
       const changes = initChanges(state, effect)
       const files = renderInitFiles(state, changes)
       Object.assign(state.inits, files)
@@ -429,13 +420,13 @@ const effectProcessor = state => {
   } = state
   return async effect => {
     switch (effect.type) {
-      case DEBUG:
+      case cmd.DEBUG:
         return state
 
-      case TEMPLATES:
+      case cmd.TEMPLATES:
         return processTemplates(state, effect)
 
-      case CHANGE: {
+      case cmd.CHANGE: {
         const { changes } = effect
         if (typeof changes === 'string' || typeof changes === 'number') {
           const lastLabel = await consumeExpects(state, changes)
@@ -452,17 +443,17 @@ const effectProcessor = state => {
         break
       }
 
-      case FLUSH_EXPECTS:
+      case cmd.FLUSH_EXPECTS:
         return flushExpects(state)
 
       // allow bailing out, for testing
-      case DISCARD_EXPECTS:
+      case cmd.DISCARD_EXPECTS:
         return discardExpects(state)
 
-      case PAGE:
+      case cmd.PAGE:
         return processPageProxy(state, effect)
 
-      case INNER_TEXT:
+      case cmd.INNER_TEXT:
         return await state.page.$eval(effect.selector, el => el && el.innerText)
     }
   }
@@ -484,7 +475,7 @@ const createTestHmr = (options = {}) => {
     const { it, reset, loadPage } = config
 
     return it(description, async () => {
-      const gen = handler()
+      const gen = handler.call(commands)
       const state = {
         config,
         pageUrl: '/',
@@ -535,7 +526,7 @@ const createTestHmr = (options = {}) => {
       await consume(gen, processInitEffect)
 
       if (!state.started && state.expects.size > 0) {
-        await start(spec.flush())
+        await start(commands.spec.flush())
       }
     })
   }
@@ -550,100 +541,9 @@ testHmr.skip = createTestHmr({ it: it.skip })
 
 testHmr.only = createTestHmr({ it: it.only })
 
-// === Effects ===
-
-const init = inits => ({ type: INIT, inits })
-
-const templates = templates => ({
-  type: TEMPLATES,
-  templates,
-})
-
-const interpolate = (strings, values) =>
-  strings
-    .reduce((parts, string, i) => {
-      parts.push(string)
-      if (values.length > i) {
-        parts.push(values[i])
-      }
-      return parts
-    }, [])
-    .join('')
-
-const spec = (arg, ...args) => {
-  const specs = Array.isArray(arg) ? interpolate(arg, args) : arg
-  return {
-    type: SPEC,
-    specs,
-  }
-}
-
-spec.expect = (label, expects) => {
-  let payload
-  if (Array.isArray(label)) {
-    // yield spec.expect([[label, expect], ...])
-    assert(expects === undefined)
-    payload = label
-  } else if (expects === undefined) {
-    // used a a template literal tag
-    return (parts, ...vals) => spec.expect(label, interpolate(parts, vals))
-  } else {
-    // yield spec.expect(label, expect)
-    assert(expects != null)
-    payload = [[label, expects]]
-  }
-  return {
-    type: EXPECT,
-    expects: payload,
-  }
-}
-
-spec.flush = () => ({
-  type: FLUSH_EXPECTS,
-})
-
-spec.discard = () => ({
-  type: DISCARD_EXPECTS,
-})
-
-const pageProxy = new Proxy(
-  () => ({
-    type: PAGE,
-  }),
-  {
-    get(target, prop) {
-      return (...args) => ({
-        type: PAGE,
-        method: prop,
-        args,
-      })
-    },
-  }
-)
-
-const innerText = selector => ({
-  type: INNER_TEXT,
-  selector,
-})
-
-const change = changes => ({
-  type: CHANGE,
-  changes,
-})
-
-change.rm = Symbol('change: rm')
-
-const debug = () => ({ type: DEBUG })
-
 // === Export ===
 
 module.exports = {
   testHmr,
-  debug,
-  spec,
-  templates,
-  change,
-  init,
-  page: pageProxy,
-  innerText,
+  ...commands,
 }

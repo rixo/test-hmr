@@ -727,6 +727,10 @@ describe('test utils: testHmr', () => {
   })
 
   describe('yield page()', () => {
+    hit('is exposed as this.page', function*() {
+      expect(this.page).to.equal(page)
+    })
+
     hit('returns the page instance', function*() {
       const p = yield page()
       expect(p).to.equal(_page)
