@@ -544,10 +544,24 @@ const templates = templates => ({
   templates,
 })
 
-const spec = specs => ({
-  type: SPEC,
-  specs,
-})
+const interpolate = (strings, values) =>
+  strings
+    .reduce((parts, string, i) => {
+      parts.push(string)
+      if (values.length > i) {
+        parts.push(values[i])
+      }
+      return parts
+    }, [])
+    .join('')
+
+const spec = (arg, ...args) => {
+  const specs = Array.isArray(arg) ? interpolate(arg, args) : arg
+  return {
+    type: SPEC,
+    specs,
+  }
+}
 
 spec.expect = (label, expects) => {
   let payload
@@ -557,8 +571,7 @@ spec.expect = (label, expects) => {
     payload = label
   } else if (expects === undefined) {
     // used a a template literal tag
-    // TODO maybe should interpolate values?
-    return parts => spec.expect(label, parts.join(''))
+    return (parts, ...vals) => spec.expect(label, interpolate(parts, vals))
   } else {
     // yield spec.expect(label, expect)
     assert(expects != null)

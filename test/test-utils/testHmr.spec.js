@@ -151,6 +151,22 @@ describe('test utils: testHmr', () => {
   })
 
   describe('yield spec("string")', () => {
+    hit('can be used as a template literal tag', function*() {
+      yield spec`
+        ---- file ----
+        contents ${'part'}
+      `
+      const contents = `
+        contents part
+      `
+      const state = yield debug()
+      expect(state.specs).to.deep.equal({
+        file: {
+          '*': contents,
+        },
+      })
+    })
+
     hit('registers simple specs with shortcut', function*() {
       yield spec(`
         ---- ether ----
@@ -366,7 +382,7 @@ describe('test utils: testHmr', () => {
     // helps with maintaining a sane formatting with prettier
     hit('can be used as a template literal tag', function*() {
       yield spec.expect(0)`
-        <p>foo</p>
+        <p>f${'o'}o</p>
       `
       yield spec.expect(1)`
         Babar
