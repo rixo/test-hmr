@@ -166,7 +166,7 @@ const parseSpecString = (() => {
 
   const isEmpty = emptyRegex.test.bind(emptyRegex)
 
-  const condRegex = /^(\s*)::([^\s+])\s+(.*)$/
+  const condRegex = /^(\s*)::([^\s+])(?:\s+(.*))?$/
 
   const expectRegex = /^\s*\*{4,}\s*$/
 
@@ -255,13 +255,13 @@ const parseSpecString = (() => {
       const condMatch = condRegex.exec(line)
       if (condMatch) {
         const [, indent, label, content] = condMatch
-        if (content[0] === '{') {
+        if (content && content[0] === '{') {
           // multi line condition
           openBranch(label, indent + content.substr(1))
         } else {
           // single line condition
           const condition = getCondition(label)
-          condition.push(indent + content)
+          condition.push(indent + (content || ''))
         }
         return
       }

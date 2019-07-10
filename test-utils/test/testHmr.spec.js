@@ -346,6 +346,7 @@ describe('test utils: testHmr', () => {
       yield spec.discard()
     })
 
+    // kitchen sink
     hit('lets mix all styles for maximum expressivity', function*() {
       yield spec(`
         ---- foo.js ----
@@ -356,24 +357,32 @@ describe('test utils: testHmr', () => {
           function foo() { console.log('bar') }
         }
         bottom
+        ---- Bar.svelte ----
+        <h1>I am Bar</h1>
+        ********
+        <h1>Result...</h1>
+        ::0
+        ::1 <p>has arrived!</p>
       `)
+
+      // --- Files ---
+
       const fooAny = `
         top
         middle
-        bottom
-      `
+        bottom`
       const foo0 = `
         top
         on 000
         middle
-        bottom
-      `
+        bottom`
       const foo1 = `
         top
         middle
           function foo() { console.log('bar') }
-        bottom
-      `
+        bottom`
+      const iAmBar = `
+        <h1>I am Bar</h1>`
       const state = yield debug()
       expect(state.specs).to.deep.equal({
         'foo.js': {
@@ -381,7 +390,19 @@ describe('test utils: testHmr', () => {
           0: foo0,
           1: foo1,
         },
+        'Bar.svelte': {
+          '*': iAmBar,
+        },
       })
+
+      // --- Expectations ---
+
+      expect([...state.expects]).to.deep.equal([
+        ['0', '<h1>Result...</h1>'],
+        ['1', '<h1>Result...</h1><p>has arrived!</p>'],
+      ])
+
+      yield spec.discard()
     })
   })
 
