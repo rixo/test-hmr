@@ -318,6 +318,33 @@ describe('test utils: testHmr', () => {
       })
     })
 
+    hit('parses expectations', function*() {
+      yield spec(`
+        ---- file ----
+        lorem ipsum
+        ****
+        before anything:
+        ::0 {
+          expect#0
+        }
+        ::1 expect#1
+        after all
+      `)
+      const lorem = `
+        lorem ipsum`
+      const state = yield debug()
+      expect([...state.expects]).to.deep.equal([
+        ['0', 'before anything:\n expect#0\n after all'],
+        ['1', 'before anything:\n expect#1\n after all'],
+      ])
+      expect(state.specs).to.deep.equal({
+        file: {
+          '*': lorem,
+        },
+      })
+      yield spec.discard()
+    })
+
     hit('lets mix all styles for maximum expressivity', function*() {
       yield spec(`
         ---- foo.js ----
@@ -516,7 +543,7 @@ describe('test utils: testHmr', () => {
     })
   })
 
-  describe('yield spec.expect: string expectations', () => {
+  describe.skip('yield spec.expect: string expectations', () => {
     hit.browser('matches full result content', function*() {
       yield spec(`
         ---- App.svelte ----

@@ -1,8 +1,10 @@
 /* eslint-env mocha */
 
 const assert = require('assert')
+const { expect } = require('chai')
 
 const { writeHmr, loadPage } = require('.')
+const normalizeHtml = require('./normalizeHtml')
 
 const INIT = 'init'
 const TEMPLATES = 'templates'
@@ -83,42 +85,17 @@ const ensureFirstExpect = (state, label) => {
   }
 }
 
-const assertExpect = (() => {
-  const sanitizeHtml = require('sanitize-html')
-  const { expect } = require('chai')
-
-  // https://stackoverflow.com/a/40026669/1387519
-  const trimRegex = /(<(pre|script|style|textarea)[^]+?<\/\2)|(^|>)\s+|\s+(?=<|$)/g
-
-  const dedupSpaceRegex = / {2,}/g
-
-  const normalizeHtml = html => {
-    let result = sanitizeHtml(html, {
-      allowedTags: false,
-      allowedAttributes: false,
-      // selfClosing: false,
-      allowedSchemes: false,
-      allowedSchemesByTag: false,
-      allowedSchemesAppliedToAttributes: false,
-    })
-    result = result.replace(trimRegex, '$1$3')
-    result = result.replace(dedupSpaceRegex, ' ')
-    return result
+const assertExpect = async (state, expectation) => {
+  if (typeof expectation === 'function') {
+    await expectation()
+  } else {
+    const { page } = state
+    const APP_ROOT_SELECTOR = '#app'
+    const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
+    const actual = normalizeHtml(contents)
+    expect(actual).to.equal(expectation)
   }
-
-  return async (state, expectation) => {
-    if (typeof expectation === 'function') {
-      await expectation()
-    } else {
-      const { page } = state
-      const APP_ROOT_SELECTOR = '#app'
-      const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
-      const actual = normalizeHtml(contents)
-      const expected = normalizeHtml(expectation)
-      expect(actual).to.equal(expected)
-    }
-  }
-})()
+}
 
 const consumeExpects = async (state, _untilLabel, alreadyWritten = false) => {
   const {
@@ -190,21 +167,6 @@ const parseSpecObject = (state, specs) => {
   return { specs: result }
 }
 
-const addExpects = (state, expects) => {
-  // guard: empty
-  if (!expects) return
-  expects.forEach(([label, expect]) => {
-    if (typeof expect === 'string') {
-      expect = expect.trim()
-    }
-    state.expects.set(String(label), expect)
-  })
-}
-
-const processExpect = (state, { expects }) => {
-  addExpects(state, expects)
-}
-
 const parseSpecString = (() => {
   const nameRegex = /^\s*----\s*([^-\s]+)(?:\s*-*\s*)?$/
 
@@ -214,9 +176,12 @@ const parseSpecString = (() => {
 
   const condRegex = /^(\s*)::([^\s+])\s+(.*)$/
 
-  const parseConditions = (lines, source) => {
+  const expectRegex = /^\s*\*{4,}\s*$/
+
+  const parseConditions = (lines, source, parseOrder = false) => {
     const leading = []
     const conditions = {}
+    const labelOrder = []
 
     let currentLabel
     let currentIndent
@@ -238,6 +203,7 @@ const parseSpecString = (() => {
       if (!cond) {
         cond = [...leading]
         conditions[label] = cond
+        labelOrder.push(label)
       }
       return cond
     }
@@ -245,7 +211,7 @@ const parseSpecString = (() => {
     const openBranch = (label, content) => {
       if (currentBranch) {
         throw new Error(
-          'Invalid specs (only supports one conditional level): ' + source
+          'Invalid specs: conditions cannot be nested\n\n' + source
         )
       }
       currentLabel = label
@@ -293,21 +259,39 @@ const parseSpecString = (() => {
         parseBranchLine(line)
         return
       }
+      // case: condition
       const condMatch = condRegex.exec(line)
-      if (!condMatch) {
-        pushLine(line)
+      if (condMatch) {
+        const [, indent, label, content] = condMatch
+        if (content[0] === '{') {
+          // multi line condition
+          openBranch(label, indent + content.substr(1))
+        } else {
+          // single line condition
+          const condition = getCondition(label)
+          condition.push(indent + content)
+        }
         return
       }
-      const [, indent, label, content] = condMatch
-      if (content[0] === '{') {
-        // multi line condition
-        openBranch(label, indent + content.substr(1))
-      } else {
-        // single line condition
-        const condition = getCondition(label)
-        condition.push(indent + content)
-      }
+      pushLine(line)
     })
+
+    // case: parsing expectations
+    if (parseOrder) {
+      const result = { order: labelOrder }
+      if (Object.keys(conditions).length === 0) {
+        return result
+      }
+      return {
+        ...result,
+        conditions: Object.fromEntries(
+          Object.entries(conditions).map(([file, lines]) => [
+            file,
+            lines.join('\n'),
+          ])
+        ),
+      }
+    }
 
     const result = {
       '*': leading.join('\n'),
@@ -328,15 +312,16 @@ const parseSpecString = (() => {
     }
   }
 
-  return (state, specs) => {
-    const specLines = specs.split('\n')
+  return (state, specString) => {
+    const specLines = specString.split('\n')
 
-    const result = {}
+    const specs = {}
+    let expects
     let currentFile
     let currentLines
 
     const endFile = () => {
-      result[currentFile] = parseConditions(currentLines, specs)
+      specs[currentFile] = parseConditions(currentLines, specString)
     }
 
     const maybeEndFile = () => {
@@ -353,16 +338,25 @@ const parseSpecString = (() => {
       currentLines = ['']
     }
 
-    specLines.forEach(line => {
+    const startExpects = lines => {
+      maybeEndFile()
+      const { order, conditions } = parseConditions(lines, '', true)
+      expects = order.map(label => [label, conditions[label]])
+    }
+
+    specLines.some((line, i) => {
       const nameMatch = nameRegex.exec(line)
       if (nameMatch) {
         startFile(nameMatch[1])
+      } else if (expectRegex.test(line)) {
+        startExpects(specLines.slice(i + 1))
+        return true
       } else {
         if (!currentLines) {
           if (isEmpty(line)) {
             return
           }
-          throw new Error('Invalid spec string: ' + specs)
+          throw new Error('Invalid spec string: ' + specString)
         }
         currentLines.push(line)
       }
@@ -371,9 +365,20 @@ const parseSpecString = (() => {
     // last file
     maybeEndFile()
 
-    return { specs: result }
+    return { specs, expects }
   }
 })()
+
+const addExpects = (state, expects) => {
+  // guard: empty
+  if (!expects) return
+  expects.forEach(([label, expect]) => {
+    if (typeof expect === 'string') {
+      expect = normalizeHtml(expect)
+    }
+    state.expects.set(String(label), expect)
+  })
+}
 
 const processSpec = (state, { specs }) => {
   const parser = typeof specs === 'string' ? parseSpecString : parseSpecObject
@@ -394,7 +399,8 @@ const initEffectProcessor = (state, start) => async effect => {
       return processSpec(state, effect)
 
     case EXPECT:
-      return processExpect(state, effect)
+      addExpects(state, effect.expects)
+      break
 
     case INIT: {
       const changes = initChanges(state, effect)
