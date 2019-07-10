@@ -18,4 +18,11 @@ module.exports = {
   // is not completely implemented yet
   //
   fastResetStrategy: true,
+
+  // they're slow, so they're annoying during active dev... by default,
+  // they're disabled when watching
+  selfIntegrationTests: process.env.E2E != 0,
+
+  // 0, or 'skip' -- default: true
+  e2e: process.env.E2E,
 }

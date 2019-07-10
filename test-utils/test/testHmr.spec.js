@@ -543,7 +543,7 @@ describe('test utils: testHmr', () => {
     })
   })
 
-  describe.skip('yield spec.expect: string expectations', () => {
+  describeE2e('yield spec.expect: string expectations', () => {
     hit.browser('matches full result content', function*() {
       yield spec(`
         ---- App.svelte ----

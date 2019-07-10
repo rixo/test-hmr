@@ -7,6 +7,8 @@ const { startWebpack } = require('../app/test-server')
 
 const { fastResetStrategy } = require('../test-utils/config')
 
+const config = require('./config')
+
 const { DEBUG } = process.env
 
 const originalGlobals = {}
@@ -24,6 +26,23 @@ const setGlobals = values => {
 const restoreGlobals = () => {
   Object.entries(originalGlobals).forEach(([key, value]) => {
     global[key] = value
+  })
+}
+
+function initSelfTests() {
+  let describeE2e = describe
+  if (config.e2e == 0) {
+    const noop = () => {}
+    Object.assign(noop, {
+      skip: noop,
+      only: noop,
+    })
+    describeE2e = noop
+  } else if (config.e2e === 'skip') {
+    describeE2e = describe.skip
+  }
+  setGlobals({
+    describeE2e,
   })
 }
 
@@ -86,5 +105,6 @@ const setupFastWebpack = () => {
 const setupWebpack = fastResetStrategy ? setupFastWebpack : setupDefaultWebpack
 
 setGlobals({ expect, sinon })
+initSelfTests()
 setupWebpack()
 setupPuppeteer()

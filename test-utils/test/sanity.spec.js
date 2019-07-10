@@ -28,9 +28,7 @@ describe('test utils: sanity check', () => {
     })
   }
 
-  describe('remote control', function() {
-    this.slow(1000)
-
+  describeE2e('remote control', () => {
     beforeEach(reset)
 
     it(

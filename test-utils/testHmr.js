@@ -471,9 +471,7 @@ const createTestHmr = (options = {}) => {
     // resolve actual config
     const { it, reset, loadPage } = config
 
-    return it(description, async function() {
-      this.slow(1000)
-
+    return it(description, async () => {
       const gen = handler()
       const state = {
         config,
