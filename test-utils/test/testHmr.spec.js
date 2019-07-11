@@ -693,25 +693,25 @@ describe('test utils: testHmr', () => {
     hit('collapses white spaces between tags to match HTML', function*() {
       _page.$eval = sinon.fake(
         async () => `
-            <h1>I  am  title</h1>
-            <p>
-              I'm&nbsp;&nbsp;   paragraph <span>I am   spanning</span>
-            </p>
-            <!--<App>-->
-          `
+          <h1>I  am  title</h1>
+          <p>
+            I'm&nbsp;&nbsp;   paragraph <span>I am   spanning</span>
+          </p>
+          <!--<App>-->
+        `
       )
       yield spec(`
-          ---- App.svelte ----
-          <h1>I  am  title</h1>
-          <p> I'm&nbsp;&nbsp;   paragraph <span>  I am   spanning</span>
-            </p>
-        `)
-      yield spec.expect(0)`
-          <h1>I am title</h1>
-          <p>
-            I'm&nbsp;&nbsp; paragraph <span>I am spanning</span>
+        ---- App.svelte ----
+        <h1>I  am  title</h1>
+        <p> I'm&nbsp;&nbsp;   paragraph <span>  I am   spanning</span>
           </p>
-        `
+      `)
+      yield spec.expect(0)`
+        <h1>I am title</h1>
+        <p>
+          I'm&nbsp;&nbsp; paragraph <span>I am spanning</span>
+        </p>
+      `
     })
 
     hit('matches full result content in all conditions', function*() {
