@@ -335,8 +335,8 @@ describe('test utils: testHmr', () => {
         lorem ipsum`
       const state = yield debug()
       expect([...state.expects]).to.deep.equal([
-        ['0', 'before anything:\n expect#0\n after all'],
-        ['1', 'before anything:\n expect#1\n after all'],
+        ['0', { html: 'before anything:\n expect#0\n after all' }],
+        ['1', { html: 'before anything:\n expect#1\n after all' }],
       ])
       expect(state.specs).to.deep.equal({
         file: {
@@ -344,6 +344,102 @@ describe('test utils: testHmr', () => {
         },
       })
       yield spec.discard()
+    })
+
+    describe('expectations subs', () => {
+      let sub0
+      let sub1
+      let sub2
+      const html = 'top\n \n bottom'
+
+      const fakeSub = i =>
+        Object.assign(function*() {}, {
+          toJSON: () => 'sub' + i,
+        })
+
+      beforeEach(() => {
+        sub0 = fakeSub(0)
+        sub1 = fakeSub(1)
+        sub2 = fakeSub(2)
+      })
+
+      hit('are parsed in single line conditions', function*() {
+        yield spec`
+          ---- file.ext ---
+          filled
+          ********
+          top
+          ::0 ${sub0}
+          ::1 ${sub1}
+          ::2 ${sub2}
+          bottom
+        `
+        const state = yield debug()
+        expect([...state.expects]).to.deep.equal([
+          ['0', { html, subs: [sub0] }],
+          ['1', { html, subs: [sub1] }],
+          ['2', { html, subs: [sub2] }],
+        ])
+        yield spec.discard()
+      })
+
+      hit('are parsed in multi line conditions', function*() {
+        yield spec`
+          ---- file.ext ---
+          filled
+          ********
+          top
+          ::0 ${sub0}
+          ::1 {
+            ${sub1}
+          }
+          ::2 ${sub2}
+          bottom
+        `
+        const state = yield debug()
+        expect([...state.expects]).to.deep.equal([
+          ['0', { html, subs: [sub0] }],
+          ['1', { html, subs: [sub1] }],
+          ['2', { html, subs: [sub2] }],
+        ])
+        yield spec.discard()
+      })
+
+      hit('stress test', function*() {
+        const sub3 = fakeSub(3)
+        const sub4 = fakeSub(4)
+        const sub5 = fakeSub(5)
+        yield spec`
+          ---- file.ext ---
+          filled
+          ********
+          top
+          ::0 ${(93, sub0)}
+          ::1 ${(108, '')}{
+            ${(122, sub1)}
+          }
+          mid
+          ::2 {
+            LLL ${sub2} RRR
+          }
+          ::3 I am ${sub3} tired
+          ::4 {
+            ${sub4}
+            ${sub5}
+          }
+          bottom
+        `
+        const state = yield debug()
+        // console.log(JSON.stringify([...state.expects], false, 2))
+        expect([...state.expects]).to.deep.equal([
+          ['0', { html: 'top\n \n mid\n bottom', subs: [sub0] }],
+          ['1', { html: 'top\n \n mid\n bottom', subs: [sub1] }],
+          ['2', { html: 'top\n mid\n LLL RRR\n bottom', subs: [sub2] }],
+          ['3', { html: 'top\n mid\n I am tired\n bottom', subs: [sub3] }],
+          ['4', { html: 'top\n mid\n \n \n bottom', subs: [sub4, sub5] }],
+        ])
+        yield spec.discard()
+      })
     })
 
     // kitchen sink
@@ -398,8 +494,8 @@ describe('test utils: testHmr', () => {
       // --- Expectations ---
 
       expect([...state.expects]).to.deep.equal([
-        ['0', '<h1>Result...</h1>'],
-        ['1', '<h1>Result...</h1><p>has arrived!</p>'],
+        ['0', { html: '<h1>Result...</h1>' }],
+        ['1', { html: '<h1>Result...</h1><p>has arrived!</p>' }],
       ])
 
       yield spec.discard()
@@ -412,8 +508,8 @@ describe('test utils: testHmr', () => {
       yield spec.expect(1, 'Babar')
       const state = yield debug()
       expect([...state.expects]).to.deep.equal([
-        ['0', '<p>foo</p>'],
-        ['1', 'Babar'],
+        ['0', { html: '<p>foo</p>' }],
+        ['1', { html: 'Babar' }],
       ])
       yield spec.discard()
     })
@@ -422,8 +518,8 @@ describe('test utils: testHmr', () => {
       yield spec.expect([[0, '<p>foo</p>'], [1, 'Babar']])
       const state = yield debug()
       expect([...state.expects]).to.deep.equal([
-        ['0', '<p>foo</p>'],
-        ['1', 'Babar'],
+        ['0', { html: '<p>foo</p>' }],
+        ['1', { html: 'Babar' }],
       ])
       yield spec.discard()
     })
@@ -438,8 +534,8 @@ describe('test utils: testHmr', () => {
       `
       const state = yield debug()
       expect([...state.expects]).to.deep.equal([
-        ['0', '<p>foo</p>'],
-        ['1', 'Babar'],
+        ['0', { html: '<p>foo</p>' }],
+        ['1', { html: 'Babar' }],
       ])
       yield spec.discard()
     })
@@ -453,7 +549,9 @@ describe('test utils: testHmr', () => {
       yield innerText('*')
       {
         const state = yield debug()
-        expect(state.remainingExpects).to.deep.equal([['0', '<p>foo</p>']])
+        expect(state.remainingExpects).to.deep.equal([
+          ['0', { html: '<p>foo</p>' }],
+        ])
       }
       yield spec.discard()
     })

@@ -78,14 +78,21 @@ const ensureFirstExpect = (state, label) => {
 }
 
 const assertExpect = async (state, expectation) => {
-  if (typeof expectation === 'function') {
-    await expectation()
-  } else {
+  const { fns, html, subs } = expectation
+  if (fns) {
+    await Promise.all(fns.map(fn => fn()))
+  }
+  if (subs) {
+    for (const sub of subs) {
+      await consume(sub.call(commands), state.processEffect)
+    }
+  }
+  if (html) {
     const { page } = state
     const APP_ROOT_SELECTOR = '#app'
     const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
     const actual = normalizeHtml(contents)
-    expect(actual).to.equal(expectation)
+    expect(actual).to.equal(html)
   }
 }
 
@@ -170,72 +177,118 @@ const parseSpecString = (() => {
 
   const expectRegex = /^\s*\*{4,}\s*$/
 
-  const parseConditions = (lines, source, parseOrder = false) => {
+  const lengthReducer = (total, { length }) => total + length
+
+  const parseConditions = (
+    lines,
+    source,
+    startIndex,
+    initialFunctions,
+    parseOrder = false
+  ) => {
     const leading = []
     const conditions = {}
     const labelOrder = []
 
     let currentLabel
-    let currentIndent
+    let currentBlocks
     let currentBranch
+    let currentStartIndex
+
+    const functions =
+      initialFunctions &&
+      initialFunctions.filter(({ index }) => index >= startIndex)
+    let currentIndex = startIndex
+
+    const shiftFunctions = (from, to) => {
+      const result = []
+      if (functions) {
+        let next
+        while ((next = functions[0])) {
+          const { index } = next
+          if (index < from) {
+            throw new Error('Sub handler must be in condition')
+          }
+          if (index > to) {
+            break
+          }
+          result.push(functions.shift().fn)
+        }
+      }
+      return result
+    }
 
     const pushLine = line => {
       if (currentBranch) {
         currentBranch.push(line)
       } else {
         leading.push(line)
+        const lineStart = currentIndex
+        currentIndex += line.length + 1
+        const fns = shiftFunctions(lineStart, currentIndex)
         Object.values(conditions).forEach(cond => {
-          cond.push(line)
+          cond.lines.push(line)
+          cond.subs.push(...fns)
         })
       }
     }
 
-    const getCondition = label => {
+    const pushCondition = (label, ...parts) => {
       let cond = conditions[label]
       if (!cond) {
-        cond = [...leading]
+        cond = { lines: [...leading], subs: [] }
         conditions[label] = cond
         labelOrder.push(label)
       }
-      return cond
+      cond.lines.push(...parts)
+      currentIndex += parts.reduce(lengthReducer, 0)
+      // subs
+      const fns = shiftFunctions(currentStartIndex, currentIndex)
+      cond.subs.push(...fns)
     }
 
     const openBranch = (label, content) => {
       if (currentBranch) {
         throw new Error(
-          'Invalid specs: conditions cannot be nested\n\n' + source
+          `Invalid specs in ${label}: conditions cannot be nested\n\n${source}`
         )
       }
       currentLabel = label
-      currentIndent = 1
+      currentBlocks = 1
       currentBranch = []
       if (!isEmpty(content)) {
         parseBranchLine(content)
+      } else {
+        currentIndex += content.length + 1
       }
     }
 
     const closeBranch = () => {
-      const cond = getCondition(currentLabel)
-      cond.push(...currentBranch)
+      pushCondition(currentLabel, ...currentBranch)
       currentBranch = null
     }
 
     const parseBranchLine = line => {
       const closed = line.split('').some((char, i) => {
         if (char === '{') {
-          currentIndent++
+          currentBlocks++
         } else if (char === '}') {
-          currentIndent--
+          currentBlocks--
         }
-        if (currentIndent === 0) {
+        if (currentBlocks === 0) {
+          currentIndex += 1 // for '}'
           const left = line.substr(0, i)
           if (!isEmpty(left)) {
             currentBranch.push(left)
+          } else {
+            currentIndex += left.length
           }
           closeBranch()
           const right = line.substr(i + 1)
           if (!isEmpty(right)) {
             pushLine(right)
+          } else {
+            currentIndex += right.length + 1 // +1 for '\n'
           }
           return true
         }
@@ -255,14 +308,19 @@ const parseSpecString = (() => {
       const condMatch = condRegex.exec(line)
       if (condMatch) {
         const [, indent, label, content] = condMatch
+        currentIndex += line.length - ((content && content.length) || 0)
+        currentStartIndex = currentIndex
+        // left indent will be fed to condition again, so we rewing a bit
+        currentIndex -= indent.length
         if (content && content[0] === '{') {
           // multi line condition
+          currentIndex += 1 // for '{'
           openBranch(label, indent + content.substr(1))
         } else {
           // single line condition
-          const condition = getCondition(label)
-          condition.push(indent + (content || ''))
+          pushCondition(label, indent + (content || ''))
         }
+        currentIndex += 1 // for '\n'
         return
       }
       pushLine(line)
@@ -277,9 +335,12 @@ const parseSpecString = (() => {
       return {
         ...result,
         conditions: Object.fromEntries(
-          Object.entries(conditions).map(([file, lines]) => [
-            file,
-            lines.join('\n'),
+          Object.entries(conditions).map(([label, { lines, subs }]) => [
+            label,
+            {
+              html: lines.join('\n'),
+              subs,
+            },
           ])
         ),
       }
@@ -296,24 +357,30 @@ const parseSpecString = (() => {
     return {
       ...result,
       ...Object.fromEntries(
-        Object.entries(conditions).map(([file, lines]) => [
-          file,
+        Object.entries(conditions).map(([label, { lines }]) => [
+          label,
           lines.join('\n'),
         ])
       ),
     }
   }
 
-  return (state, specString) => {
+  return (state, specString, functions) => {
     const specLines = specString.split('\n')
 
     const specs = {}
     let expects
     let currentFile
     let currentLines
+    let parsedLength = 0
 
     const endFile = () => {
-      specs[currentFile] = parseConditions(currentLines, specString)
+      specs[currentFile] = parseConditions(
+        currentLines,
+        specString,
+        parsedLength,
+        functions
+      )
     }
 
     const maybeEndFile = () => {
@@ -330,25 +397,36 @@ const parseSpecString = (() => {
       currentLines = ['']
     }
 
-    const startExpects = lines => {
+    const parseExpects = lines => {
       maybeEndFile()
-      const { order, conditions } = parseConditions(lines, '', true)
-      expects = order.map(label => [label, conditions[label]])
+      const { order, conditions } = parseConditions(
+        lines,
+        specString,
+        parsedLength,
+        functions,
+        true
+      )
+      return order.map(label => [label, conditions[label]])
     }
 
     specLines.some((line, i) => {
+      parsedLength += line.length + 1 // +1 for new line char
       const nameMatch = nameRegex.exec(line)
       if (nameMatch) {
         startFile(nameMatch[1])
       } else if (expectRegex.test(line)) {
-        startExpects(specLines.slice(i + 1))
+        const remainingLines = specLines.slice(i + 1)
+        expects = parseExpects(remainingLines)
         return true
       } else {
         if (!currentLines) {
           if (isEmpty(line)) {
             return
           }
-          throw new Error('Invalid spec string: ' + specString)
+          // TODO testHmr tag: parse title if files count < 0
+          throw new Error(
+            'Invalid spec string (probably missing filename): ' + specString
+          )
         }
         currentLines.push(line)
       }
@@ -361,20 +439,37 @@ const parseSpecString = (() => {
   }
 })()
 
+const parseExpect = expect => {
+  let html
+  const result = {}
+  if (typeof expect === 'function') {
+    result.fns = [expect]
+  } else if (typeof expect === 'string') {
+    html = expect
+  } else if (typeof expect) {
+    html = expect.html
+    if (expect.subs && expect.subs.length > 0) {
+      result.subs = expect.subs
+    }
+  }
+  if (html) {
+    result.html = normalizeHtml(html)
+  }
+  return result
+}
+
 const addExpects = (state, expects) => {
   // guard: empty
   if (!expects) return
   expects.forEach(([label, expect]) => {
-    if (typeof expect === 'string') {
-      expect = normalizeHtml(expect)
-    }
-    state.expects.set(String(label), expect)
+    const parsed = parseExpect(expect)
+    state.expects.set(String(label), parsed)
   })
 }
 
-const processSpec = (state, { specs }) => {
+const processSpec = (state, { specs, functions }) => {
   const parser = typeof specs === 'string' ? parseSpecString : parseSpecObject
-  const result = parser(state, specs)
+  const result = parser(state, specs, functions)
   Object.assign(state.specs, result.specs)
   addExpects(state, result.expects)
 }
@@ -508,6 +603,8 @@ const createTestHmr = (options = {}) => {
         state.started = true
 
         const processEffect = effectProcessor(state)
+
+        state.processEffect = processEffect
 
         const inPage = async page => {
           state.page = page
