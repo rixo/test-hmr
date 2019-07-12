@@ -647,19 +647,20 @@ describe('test utils: testHmr', () => {
         const subBefore = fakeSub('before')
         const subAfter = fakeSub('after')
         yield spec`
-          ---- file.ext ---
-          filled
+          ---- App.svelte ----
+
+          ::0 <Child />
+          ::1 <Child />
+          ::2 <Child />
+
           ********
-          top
-          ::0 {
-            first
-            ${
-              // multiline
-              function*() {}
+
+          <h2>
+            ::0 {
+              I am Crash
+              ${sub3}
             }
-            last
-          }
-          bottom
+          </h2>
         `
         const state = yield debug()
         console.log(JSON.stringify([...state.expects], false, 2))
