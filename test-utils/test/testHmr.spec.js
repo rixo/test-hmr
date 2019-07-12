@@ -335,15 +335,15 @@ describe('test utils: testHmr', () => {
         lorem ipsum`
       const state = yield debug()
       expect([...state.expects]).to.deep.equal([
-        ['0', { html: 'before anything:\n expect#0\n after all' }],
-        ['1', { html: 'before anything:\n expect#1\n after all' }],
+        ['0', { steps: [{ html: 'before anything:\n expect#0\n after all' }] }],
+        ['1', { steps: [{ html: 'before anything:\n expect#1\n after all' }] }],
       ])
       expect(state.specs).to.deep.equal({
         file: {
           '*': lorem,
         },
       })
-      yield spec.discard()
+      yield spec.$$discard()
     })
 
     describe('expectations subs', () => {
@@ -355,6 +355,7 @@ describe('test utils: testHmr', () => {
       const fakeSub = i =>
         Object.assign(function*() {}, {
           toJSON: () => 'sub' + i,
+          toString: () => 'sub' + i,
         })
 
       beforeEach(() => {
@@ -363,83 +364,385 @@ describe('test utils: testHmr', () => {
         sub2 = fakeSub(2)
       })
 
-      hit('are parsed in single line conditions', function*() {
+      hit('parses before & after hooks', function*() {
+        // DEBUG DEBUG DEBUG
+        // yield spec`
+        //   ---- file.ext ---
+        //   filled
+        //   ${(56, '')}********
+        //   ${(75, '')}top
+        //   ${(89, '')}::0 ${(93, sub0)}
+        //   ${(104, '')}::0 ${(108, sub1)}
+        //   ${(119, '')}bottom
+        // `
         yield spec`
           ---- file.ext ---
           filled
           ********
           top
           ::0 ${sub0}
-          ::1 ${sub1}
-          ::2 ${sub2}
+          ::0 ${sub1}
           bottom
         `
         const state = yield debug()
         expect([...state.expects]).to.deep.equal([
-          ['0', { html, subs: [sub0] }],
-          ['1', { html, subs: [sub1] }],
-          ['2', { html, subs: [sub2] }],
+          [
+            '0',
+            {
+              before: sub0,
+              after: sub1,
+              steps: [{ html: 'top\n bottom' }],
+            },
+          ],
         ])
-        yield spec.discard()
+        yield spec.$$discard()
       })
 
-      hit('are parsed in multi line conditions', function*() {
+      hit('throws if there are more than 2 hook functions', function*() {
+        let error
+        try {
+          yield spec`
+            ---- file.ext ---
+            filled
+            ********
+            top
+            ::0 ${sub0}
+            ::0 ${sub1}
+            ::0 ${sub2}
+            bottom
+          `
+        } catch (err) {
+          error = err
+        }
+        expect(error).not.to.be.undefined
+        yield spec.$$discard()
+      })
+
+      hit('parses steps in condition blocks', function*() {
         yield spec`
           ---- file.ext ---
           filled
           ********
           top
-          ::0 ${sub0}
+          ::0 zero
           ::1 {
+            ${sub0}
+            first
             ${sub1}
+            second
+            ${sub2}
           }
-          ::2 ${sub2}
           bottom
         `
         const state = yield debug()
         expect([...state.expects]).to.deep.equal([
-          ['0', { html, subs: [sub0] }],
-          ['1', { html, subs: [sub1] }],
-          ['2', { html, subs: [sub2] }],
+          [
+            '0',
+            {
+              steps: [{ html: 'top\n zero\n bottom' }],
+            },
+          ],
+          [
+            '1',
+            {
+              steps: [
+                { sub: sub0 },
+                { html: 'top\n first\n bottom' },
+                { sub: sub1 },
+                { html: 'top\n second\n bottom' },
+                { sub: sub2 },
+              ],
+            },
+          ],
         ])
-        yield spec.discard()
+        yield spec.$$discard()
       })
 
-      hit('stress test', function*() {
+      hit('parses last expectation step when not a sub', function*() {
+        yield spec`
+          ---- file.ext ---
+          filled
+          ********
+          top
+          ::0 zero
+          ::1 {
+            ${sub0}
+            first
+            ${sub1}
+            second
+            ${sub2}
+            last
+          }
+          bottom
+        `
+        const state = yield debug()
+        expect([...state.expects]).to.deep.equal([
+          [
+            '0',
+            {
+              steps: [{ html: 'top\n zero\n bottom' }],
+            },
+          ],
+          [
+            '1',
+            {
+              steps: [
+                { sub: sub0 },
+                { html: 'top\n first\n bottom' },
+                { sub: sub1 },
+                { html: 'top\n second\n bottom' },
+                { sub: sub2 },
+                { html: 'top\n last\n bottom' },
+              ],
+            },
+          ],
+        ])
+        yield spec.$$discard()
+      })
+
+      hit('parses multiple step subs on a single line', function*() {
         const sub3 = fakeSub(3)
         const sub4 = fakeSub(4)
         const sub5 = fakeSub(5)
+        // yield spec`
+        //   ---- file.ext ---
+        //   filled
+        //   ********
+        //   top
+        //   ::0 zero
+        //   ::1 {
+        //     ${sub0}
+        //     first
+        //     ${sub1}
+        //     second ${sub2} last ${sub3}
+        //     everlast
+        //   }
+        //   bottom
+        // `
         yield spec`
           ---- file.ext ---
           filled
           ********
           top
-          ::0 ${(93, sub0)}
-          ::1 ${(108, '')}{
-            ${(122, sub1)}
-          }
-          mid
-          ::2 {
-            LLL ${sub2} RRR
-          }
-          ::3 I am ${sub3} tired
-          ::4 {
-            ${sub4}
-            ${sub5}
+          ::0 zero
+          ::1 {${(113, '')}
+            ${sub0}
+            first
+            ${sub1}
+            second ${sub2} last ${sub3}
+            everlast
           }
           bottom
         `
         const state = yield debug()
         // console.log(JSON.stringify([...state.expects], false, 2))
         expect([...state.expects]).to.deep.equal([
-          ['0', { html: 'top\n \n mid\n bottom', subs: [sub0] }],
-          ['1', { html: 'top\n \n mid\n bottom', subs: [sub1] }],
-          ['2', { html: 'top\n mid\n LLL RRR\n bottom', subs: [sub2] }],
-          ['3', { html: 'top\n mid\n I am tired\n bottom', subs: [sub3] }],
-          ['4', { html: 'top\n mid\n \n \n bottom', subs: [sub4, sub5] }],
+          [
+            '0',
+            {
+              steps: [{ html: 'top\n zero\n bottom' }],
+            },
+          ],
+          [
+            '1',
+            {
+              steps: [
+                { sub: sub0 },
+                { html: 'top\n first\n bottom' },
+                { sub: sub1 },
+                { html: 'top\n second \n bottom' },
+                { sub: sub2 },
+                { html: 'top\n last \n bottom' },
+                { sub: sub3 },
+                { html: 'top\n everlast\n bottom' },
+              ],
+            },
+          ],
         ])
-        yield spec.discard()
+        yield spec.$$discard()
       })
+
+      hit('parses multiple step per line in edge cases', function*() {
+        const sub3 = fakeSub(3)
+        yield spec`
+          ---- file.ext ---
+          filled
+          ********
+          top
+          ::0 {
+            f${sub0}i${sub1}rst
+            ${sub2}${sub3}
+            everlast
+          }
+          bottom
+        `
+        const state = yield debug()
+        expect([...state.expects]).to.deep.equal([
+          [
+            '0',
+            {
+              steps: [
+                { html: 'top\n f\n bottom' },
+                { sub: sub0 },
+                { html: 'top\ni\n bottom' },
+                { sub: sub1 },
+                { html: 'top\nrst\n bottom' },
+                { sub: sub2 },
+                { sub: sub3 },
+                { html: 'top\n everlast\n bottom' },
+              ],
+            },
+          ],
+        ])
+        yield spec.$$discard()
+      })
+
+      hit('parses before and after hooks when there are steps', function*() {
+        const sub3 = fakeSub(3)
+        const subBefore = fakeSub('before')
+        const subAfter = fakeSub('after')
+        yield spec`
+          ---- file.ext ---
+          filled
+          ********
+          top
+          ::1 {
+            zip
+          }
+          ::0 ${subBefore}
+          ::0 {
+            f${sub0}i${sub1}rst
+            ${sub2}${sub3}
+            everlast
+          }
+          ::0 ${subAfter}
+          bottom
+        `
+        const state = yield debug()
+        expect([...state.expects]).to.deep.equal([
+          ['1', { steps: [{ html: 'top\n zip\n bottom' }] }],
+          [
+            '0',
+            {
+              before: subBefore,
+              after: subAfter,
+              steps: [
+                { html: 'top\n f\n bottom' },
+                { sub: sub0 },
+                { html: 'top\ni\n bottom' },
+                { sub: sub1 },
+                { html: 'top\nrst\n bottom' },
+                { sub: sub2 },
+                { sub: sub3 },
+                { html: 'top\n everlast\n bottom' },
+              ],
+            },
+          ],
+        ])
+        yield spec.$$discard()
+      })
+
+      hit.only('parses multiline sub steps', function*() {
+        const sub3 = fakeSub(3)
+        const subBefore = fakeSub('before')
+        const subAfter = fakeSub('after')
+        yield spec`
+          ---- file.ext ---
+          filled
+          ********
+          top
+          ::0 {
+            first
+            ${
+              // multiline
+              function*() {}
+            }
+            last
+          }
+          bottom
+        `
+        const state = yield debug()
+        console.log(JSON.stringify([...state.expects], false, 2))
+        // expect([...state.expects]).to.deep.equal([
+        //   ['1', { steps: [{ html: 'top\n zip\n bottom' }] }],
+        //   [
+        //     '0',
+        //     {
+        //       before: subBefore,
+        //       after: subAfter,
+        //       steps: [
+        //         { html: 'top\n f\n bottom' },
+        //         { sub: sub0 },
+        //         { html: 'top\ni\n bottom' },
+        //         { sub: sub1 },
+        //         { html: 'top\nrst\n bottom' },
+        //         { sub: sub2 },
+        //         { sub: sub3 },
+        //         { html: 'top\n everlast\n bottom' },
+        //       ],
+        //     },
+        //   ],
+        // ])
+        yield spec.$$discard()
+      })
+
+      // hit('are parsed in multi line conditions', function*() {
+      //   yield spec`
+      //     ---- file.ext ---
+      //     filled
+      //     ********
+      //     top
+      //     ::0 ${sub0}
+      //     ::1 {
+      //       ${sub1}
+      //     }
+      //     ::2 ${sub2}
+      //     bottom
+      //   `
+      //   const state = yield debug()
+      //   expect([...state.expects]).to.deep.equal([
+      //     ['0', { html, subs: [sub0] }],
+      //     ['1', { html, subs: [sub1] }],
+      //     ['2', { html, subs: [sub2] }],
+      //   ])
+      //   yield spec.$$discard()
+      // })
+      //
+      // hit('stress test', function*() {
+      //   const sub3 = fakeSub(3)
+      //   const sub4 = fakeSub(4)
+      //   const sub5 = fakeSub(5)
+      //   yield spec`
+      //     ---- file.ext ---
+      //     filled
+      //     ********
+      //     top
+      //     ::0 ${(93, sub0)}
+      //     ::1 ${(108, '')}{
+      //       ${(122, sub1)}
+      //     }
+      //     mid
+      //     ::2 {
+      //       LLL ${sub2} RRR
+      //     }
+      //     ::3 I am ${sub3} tired
+      //     ::4 {
+      //       ${sub4}
+      //       ${sub5}
+      //     }
+      //     bottom
+      //   `
+      //   const state = yield debug()
+      //   // console.log(JSON.stringify([...state.expects], false, 2))
+      //   expect([...state.expects]).to.deep.equal([
+      //     ['0', { html: 'top\n \n mid\n bottom', subs: [sub0] }],
+      //     ['1', { html: 'top\n \n mid\n bottom', subs: [sub1] }],
+      //     ['2', { html: 'top\n mid\n LLL RRR\n bottom', subs: [sub2] }],
+      //     ['3', { html: 'top\n mid\n I am tired\n bottom', subs: [sub3] }],
+      //     ['4', { html: 'top\n mid\n \n \n bottom', subs: [sub4, sub5] }],
+      //   ])
+      //   yield spec.$$discard()
+      // })
     })
 
     // kitchen sink
@@ -494,11 +797,11 @@ describe('test utils: testHmr', () => {
       // --- Expectations ---
 
       expect([...state.expects]).to.deep.equal([
-        ['0', { html: '<h1>Result...</h1>' }],
-        ['1', { html: '<h1>Result...</h1><p>has arrived!</p>' }],
+        ['0', { steps: [{ html: '<h1>Result...</h1>' }] }],
+        ['1', { steps: [{ html: '<h1>Result...</h1><p>has arrived!</p>' }] }],
       ])
 
-      yield spec.discard()
+      yield spec.$$discard()
     })
   })
 
@@ -508,20 +811,20 @@ describe('test utils: testHmr', () => {
       yield spec.expect(1, 'Babar')
       const state = yield debug()
       expect([...state.expects]).to.deep.equal([
-        ['0', { html: '<p>foo</p>' }],
-        ['1', { html: 'Babar' }],
+        ['0', { steps: [{ html: '<p>foo</p>' }] }],
+        ['1', { steps: [{ html: 'Babar' }] }],
       ])
-      yield spec.discard()
+      yield spec.$$discard()
     })
 
     hit('accepts a single array arg', function*() {
       yield spec.expect([[0, '<p>foo</p>'], [1, 'Babar']])
       const state = yield debug()
       expect([...state.expects]).to.deep.equal([
-        ['0', { html: '<p>foo</p>' }],
-        ['1', { html: 'Babar' }],
+        ['0', { steps: [{ html: '<p>foo</p>' }] }],
+        ['1', { steps: [{ html: 'Babar' }] }],
       ])
-      yield spec.discard()
+      yield spec.$$discard()
     })
 
     // helps with maintaining a sane formatting with prettier
@@ -534,10 +837,148 @@ describe('test utils: testHmr', () => {
       `
       const state = yield debug()
       expect([...state.expects]).to.deep.equal([
-        ['0', { html: '<p>foo</p>' }],
-        ['1', { html: 'Babar' }],
+        ['0', { steps: [{ html: '<p>foo</p>' }] }],
+        ['1', { steps: [{ html: 'Babar' }] }],
       ])
-      yield spec.discard()
+      yield spec.$$discard()
+    })
+
+    hit('accepts strings for html', function*() {
+      yield spec.expect(0, 'foo')
+      yield spec.expect(1, 'bar')
+      const state = yield debug()
+      expect([...state.expects]).to.deep.equal([
+        ['0', { steps: [{ html: 'foo' }] }],
+        ['1', { steps: [{ html: 'bar' }] }],
+      ])
+      yield spec.$$discard()
+    })
+
+    hit('accepts function', function*() {
+      const foo = () => {}
+      const bar = async () => {}
+      yield spec.expect(0, foo)
+      yield spec.expect(1, bar)
+      const state = yield debug()
+      expect([...state.expects]).to.deep.equal([
+        ['0', { steps: [{ function: foo }] }],
+        ['1', { steps: [{ function: bar }] }],
+      ])
+      yield spec.$$discard()
+    })
+
+    hit('accepts generator for sub functions', function*() {
+      const foo = function*() {}
+      const bar = function* bar() {}
+      yield spec.expect(0, foo)
+      yield spec.expect(1, bar)
+      const state = yield debug()
+      expect([...state.expects]).to.deep.equal([
+        ['0', { steps: [{ sub: foo }] }],
+        ['1', { steps: [{ sub: bar }] }],
+      ])
+      yield spec.$$discard()
+    })
+
+    hit('adds up successive calls for the same label', function*() {
+      const foo = () => {}
+      const bar = () => {}
+      yield spec.expect(0, foo)
+      yield spec.expect(1, 'bar')
+      yield spec.expect(0, 'foo')
+      yield spec.expect(1, bar)
+      const state = yield debug()
+      expect([...state.expects]).to.deep.equal([
+        ['0', { steps: [{ function: foo }, { html: 'foo' }] }],
+        ['1', { steps: [{ html: 'bar' }, { function: bar }] }],
+      ])
+      yield spec.$$discard()
+    })
+
+    describe('yield spec.before(fn*)', () => {
+      hit('adds a before sub to the case', function*() {
+        const foo = function*() {}
+        const bar = function* bar() {}
+        yield spec.before(0, foo)
+        yield spec.expect(1, 'bar')
+        yield spec.expect(0, 'foo')
+        yield spec.before(1, bar)
+        const state = yield debug()
+        expect([...state.expects]).to.deep.equal([
+          ['0', { before: foo, steps: [{ html: 'foo' }] }],
+          ['1', { before: bar, steps: [{ html: 'bar' }] }],
+        ])
+        yield spec.$$discard()
+      })
+
+      it('runs before hook before all steps in the case', async () => {
+        // before test
+        const before = sinon.fake(function* after() {})
+        const step0 = sinon.fake(() => {
+          expect(before, 'before').not.to.have.been.called
+          expect(step1, 'step1').not.to.have.been.called
+        })
+        const step1 = sinon.fake(() => {
+          expect(before, 'before').to.have.been.called
+          expect(step0, 'step0').to.have.been.calledOnce
+        })
+        // test
+        await _testHmr('kitchen sink', function*() {
+          _page.$eval = sinon.fake(
+            async () => `
+              <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
+            `
+          )
+          yield spec.expect(0, step0)
+          yield spec.expect(1, step1)
+          yield spec.before(1, before)
+        })
+        // after test
+        expect(step1, 'step1').to.have.been.calledOnce
+      })
+    })
+
+    describe('yield spec.after(fn*)', () => {
+      hit('adds a after sub to the case', function*() {
+        const foo = function*() {}
+        const bar = function* bar() {}
+        yield spec.after(0, foo)
+        yield spec.expect(1, 'bar')
+        yield spec.expect(0, 'foo')
+        yield spec.after(1, bar)
+        const state = yield debug()
+        expect([...state.expects]).to.deep.equal([
+          ['0', { after: foo, steps: [{ html: 'foo' }] }],
+          ['1', { after: bar, steps: [{ html: 'bar' }] }],
+        ])
+        yield spec.$$discard()
+      })
+
+      it('runs after hook after all steps in the case', async () => {
+        // before test
+        const after = sinon.fake(function* after() {})
+        const step0 = sinon.fake(() => {
+          expect(after, 'after').not.to.have.been.called
+          expect(step1, 'step1').not.to.have.been.called
+        })
+        const step1 = sinon.fake(() => {
+          expect(after, 'after').to.have.been.calledOnce
+          expect(step0, 'step0').to.have.been.calledOnce
+        })
+        // test
+        await _testHmr('kitchen sink', function*() {
+          _page.$eval = sinon.fake(
+            async () => `
+              <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
+            `
+          )
+          yield spec.after(0, after)
+          yield spec.expect(0, step0)
+          yield spec.expect(1, step1)
+        })
+        // after test
+        expect(step1, 'step1').to.have.been.calledOnce
+      })
     })
 
     hit('compiles expectations on first non-init effect', function*() {
@@ -550,10 +991,10 @@ describe('test utils: testHmr', () => {
       {
         const state = yield debug()
         expect(state.remainingExpects).to.deep.equal([
-          ['0', { html: '<p>foo</p>' }],
+          ['0', { steps: [{ html: '<p>foo</p>' }] }],
         ])
       }
-      yield spec.discard()
+      yield spec.$$discard()
     })
 
     hit('crashes when init not on the first expectation step', function*() {
@@ -591,17 +1032,11 @@ describe('test utils: testHmr', () => {
     })
 
     hit('runs skipped expectations', function*() {
-      const expects = {
-        0: sinon.fake(),
-        1: sinon.fake(),
-        2: sinon.fake(),
-        3: sinon.fake(),
+      const expects = {}
+      for (let i = 0; i < 4; i++) {
+        expects[i] = sinon.fake()
+        yield spec.expect(i, expects[i])
       }
-      yield spec.expect(0, expects[0])
-      yield spec.expect(1, expects[1])
-      yield spec.expect(2, expects[2])
-      yield spec.expect(3, expects[3])
-
       yield init(0)
       expect(expects[1], '-0.0').not.to.have.been.called
       // 0
@@ -619,18 +1054,13 @@ describe('test utils: testHmr', () => {
     })
 
     it('flushes remaining steps when generator returns', async () => {
-      const expects = {
-        0: sinon.fake(),
-        1: sinon.fake(),
-        2: sinon.fake(),
-        3: sinon.fake(),
-      }
+      const expects = {}
 
       await _testHmr('kitchen sink', function*() {
-        yield spec.expect(0, expects[0])
-        yield spec.expect(1, expects[1])
-        yield spec.expect(2, expects[2])
-        yield spec.expect(3, expects[3])
+        for (let i = 0; i < 4; i++) {
+          expects[i] = sinon.fake()
+          yield spec.expect(i, expects[i])
+        }
 
         yield init(0)
         expect(expects[1], '-0.0').not.to.have.been.called
@@ -664,6 +1094,36 @@ describe('test utils: testHmr', () => {
   })
 
   describe('yield spec.expect(int, string)', () => {
+    it('flushes remaining steps when generator returns', async () => {
+      const after = sinon.fake(function* after() {})
+
+      await _testHmr('kitchen sink', function*() {
+        _page.$eval = sinon.fake(
+          async () => `
+            <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
+          `
+        )
+        yield spec(`
+          ---- App.svelte ----
+          <script>
+            import Child from './Child'
+          </script>
+          <Child name="Kild" />
+          ---- Child.svelte ----
+          <script>
+            export let name
+          </script>
+          <h2>{name}: I am expected</h2>
+        `)
+        yield spec.expect(0)`
+          <h2>Kild: I am expected</h2>
+        `
+        yield spec.after(0, after)
+      })
+
+      expect(after, 'after hook').to.have.been.calledOnce
+    })
+
     hit('matches full result content', function*() {
       _page.$eval = sinon.fake(
         async () => `
@@ -682,12 +1142,9 @@ describe('test utils: testHmr', () => {
         </script>
         <h2>{name}: I am expected</h2>
       `)
-      yield spec.expect(
-        0,
-        `
-          <h2>Kild: I am expected</h2>
-        `
-      )
+      yield spec.expect(0)`
+        <h2>Kild: I am expected</h2>
+      `
     })
 
     hit('collapses white spaces between tags to match HTML', function*() {

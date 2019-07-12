@@ -1,6 +1,7 @@
 /* eslint-env mocha */
 
 const { expect } = require('chai')
+const assert = require('assert')
 
 const { writeHmr, loadPage } = require('.')
 const normalizeHtml = require('./normalizeHtml')
@@ -9,6 +10,15 @@ const cmd = require('./testHmr.commands')
 const { commands } = cmd
 
 const nullLabel = Symbol('NULL LABEL')
+
+const isGenerator = (() => {
+  const GeneratorFunction = function*() {
+    yield undefined
+  }.constructor
+  return fn => fn instanceof GeneratorFunction
+})()
+
+const consumeSub = (sub, callback) => consume(sub.call(commands), callback)
 
 const consume = async (gen, callback, firstValue) => {
   let next
@@ -78,21 +88,31 @@ const ensureFirstExpect = (state, label) => {
 }
 
 const assertExpect = async (state, expectation) => {
-  const { fns, html, subs } = expectation
-  if (fns) {
-    await Promise.all(fns.map(fn => fn()))
+  const { before, after, steps = [] } = expectation
+  if (before) {
+    await consumeSub(before, state.processEffect)
   }
-  if (subs) {
-    for (const sub of subs) {
-      await consume(sub.call(commands), state.processEffect)
+  for (const step of steps) {
+    const { function: fn, html, before: beforeStep, after: afterStep } = step
+    if (beforeStep) {
+      await consumeSub(beforeStep, state.processEffect)
+    }
+    if (fn) {
+      await fn.call(commands)
+    }
+    if (html) {
+      const { page } = state
+      const APP_ROOT_SELECTOR = '#app'
+      const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
+      const actual = normalizeHtml(contents)
+      expect(actual).to.equal(html)
+    }
+    if (afterStep) {
+      await consumeSub(afterStep, state.processEffect)
     }
   }
-  if (html) {
-    const { page } = state
-    const APP_ROOT_SELECTOR = '#app'
-    const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
-    const actual = normalizeHtml(contents)
-    expect(actual).to.equal(html)
+  if (after) {
+    await consumeSub(after, state.processEffect)
   }
 }
 
@@ -177,74 +197,171 @@ const parseSpecString = (() => {
 
   const expectRegex = /^\s*\*{4,}\s*$/
 
-  const lengthReducer = (total, { length }) => total + length
+  const compileFileCondition = cond => {
+    const { lines, steps, stepsIndex } = cond
+    if (steps && steps.length > 0) {
+      if (steps.length > 1) {
+        throw new Error('Flow steps are only allowed in expectation context')
+      }
+      const html = [
+        ...lines.slice(0, stepsIndex),
+        ...steps[0].lines,
+        ...lines.slice(stepsIndex),
+      ].join('\n')
+      return html
+    }
+    return lines.join('\n')
+  }
+
+  const compileExpectCase = ({ lines, steps, stepsIndex, ...other }) => {
+    const hmrCase = {
+      ...other, // really?
+    }
+    if (steps) {
+      hmrCase.steps = steps.map(step => {
+        if (step.lines) {
+          const html = [
+            ...lines.slice(0, stepsIndex),
+            ...step.lines,
+            ...lines.slice(stepsIndex),
+          ].join('\n')
+          return {
+            html: normalizeHtml(html),
+          }
+        } else {
+          return step
+        }
+      })
+    } else {
+      if (lines) {
+        hmrCase.steps = [
+          {
+            html: normalizeHtml(lines.join('\n')),
+          },
+        ]
+      }
+    }
+    // if (hmrCase.steps && !hmrCase.steps.length) {
+    //   delete hmrCase.steps
+    // }
+    return hmrCase
+  }
 
   const parseConditions = (
     lines,
     source,
     startIndex,
     initialFunctions,
-    parseOrder = false
+    isExpectations = false
   ) => {
     const leading = []
     const conditions = {}
-    const labelOrder = []
+    const labelOrder = new Set()
 
     let currentLabel
     let currentBlocks
     let currentBranch
-    let currentStartIndex
+    let from
+
+    // let currentStepLines = []
 
     const functions =
       initialFunctions &&
       initialFunctions.filter(({ index }) => index >= startIndex)
     let currentIndex = startIndex
 
-    const shiftFunctions = (from, to) => {
+    // const flushCurrentStep = () => {
+    //   if (!currentLabel) {
+    //     throw new Error('Illegal state: not in a condition')
+    //   }
+    //   const hasContent =
+    //     currentStepLines.length > 0 &&
+    //     currentStepLines.every(line => !isEmpty(line))
+    //   // guard: current step is empty
+    //   if (!hasContent) return
+    //   const cond = conditions[currentLabel]
+    //   if (!cond) {
+    //     throw new Error('Missing condition: ' + currentLabel)
+    //   }
+    //   cond.steps.push({
+    //     html: currentStepLines.join('\n'),
+    //   })
+    //   currentStepLines = []
+    // }
+
+    const shiftFunctions = (from, to, returnIndex = false) => {
       const result = []
       if (functions) {
         let next
         while ((next = functions[0])) {
           const { index } = next
           if (index < from) {
+            console.log(from, to, JSON.stringify(functions))
             throw new Error('Sub handler must be in condition')
           }
-          if (index > to) {
+          // if (index > to) { DEBUG DEBUG DEBUG
+          if (index >= to) {
             break
           }
-          result.push(functions.shift().fn)
+          const item = functions.shift()
+          result.push(returnIndex ? item : item.fn)
         }
       }
       return result
     }
 
+    const consumeRootFunctions = (cond, from, to) => {
+      if (currentBranch != null) {
+        throw new Error(
+          'Illegal state: consumeRootFunctions called inside a branch'
+        )
+      }
+      const fns = shiftFunctions(from, to)
+      fns.forEach(fn => {
+        if (!cond.before) {
+          cond.before = fn
+        } else if (!cond.after) {
+          cond.after = fn
+        } else {
+          throw new Error(
+            'Only 2 sub fns are allowed at root level (before & after)'
+          )
+        }
+      })
+    }
+
     const pushLine = line => {
       if (currentBranch) {
-        currentBranch.push(line)
+        // currentBranch.push(line)
+        throw new Error('Illegal state: pushLine inside a branch')
       } else {
         leading.push(line)
         const lineStart = currentIndex
         currentIndex += line.length + 1
         const fns = shiftFunctions(lineStart, currentIndex)
+        if (fns.length > 0) {
+          throw new Error('Sub functions must be inside of labelled conditions')
+        }
         Object.values(conditions).forEach(cond => {
           cond.lines.push(line)
-          cond.subs.push(...fns)
         })
       }
     }
 
-    const pushCondition = (label, ...parts) => {
-      let cond = conditions[label]
-      if (!cond) {
-        cond = { lines: [...leading], subs: [] }
+    const resolveCondition = label => {
+      const cond = conditions[label]
+      if (cond) {
+        return cond
+      } else {
+        const cond = { lines: [...leading] }
         conditions[label] = cond
-        labelOrder.push(label)
+        labelOrder.add(label)
+        return cond
       }
-      cond.lines.push(...parts)
-      currentIndex += parts.reduce(lengthReducer, 0)
-      // subs
-      const fns = shiftFunctions(currentStartIndex, currentIndex)
-      cond.subs.push(...fns)
+    }
+
+    const pushBranchLine = string => {
+      currentBranch.push(string)
     }
 
     const openBranch = (label, content) => {
@@ -256,15 +373,82 @@ const parseSpecString = (() => {
       currentLabel = label
       currentBlocks = 1
       currentBranch = []
-      if (!isEmpty(content)) {
-        parseBranchLine(content)
+      if (isEmpty(content)) {
+        // currentIndex += content.length + 1 // +1 for '\n'
+        pushBranchLine(content)
       } else {
-        currentIndex += content.length + 1
+        parseBranchLine(content)
       }
     }
 
     const closeBranch = () => {
-      pushCondition(currentLabel, ...currentBranch)
+      // const cond = resolveCondition(currentLabel)
+      // cond.lines.push(...currentBranch)
+      // console.log('closeBranch', currentIndex, currentBranch)
+      // console.log(functions)
+      const branchStartIndex = currentIndex
+      const cond = resolveCondition(currentLabel)
+      const contentLines = []
+      const steps = []
+
+      const flush = () => {
+        if (contentLines.length > 0) {
+          const lines = contentLines.splice(0, contentLines.length)
+          steps.push({
+            // html: normalizeHtml(lines.join('\n')),
+            lines,
+          })
+        }
+      }
+
+      currentBranch.forEach(line => {
+        const lineIndex = currentIndex
+        const from = lineIndex
+        const to = from + line.length + 1 // +1 for '\n'
+        const fns = shiftFunctions(from, to, true)
+        // console.log(from, to, line, fns.map(f => f.index))
+        if (fns.length) {
+          let leftIndex = 0
+          fns.forEach(({ fn, index }, i) => {
+            // 1. content before ${sub}
+            const leftEnd = index - lineIndex
+            const left = line.substring(leftIndex, leftEnd)
+            leftIndex = leftEnd
+            if (!isEmpty(left)) {
+              contentLines.push(left)
+            }
+            flush()
+            // 2. sub function step
+            steps.push({ sub: fn })
+            // 3. content after ${sub}
+            const nextFn = fns[i + 1]
+            if (!nextFn) {
+              const right = line.substring(leftIndex)
+              if (!isEmpty(right)) {
+                contentLines.push(right)
+              }
+            }
+          })
+        } else {
+          if (!isEmpty(line)) {
+            contentLines.push(line)
+          }
+        }
+        currentIndex = to
+      })
+
+      flush()
+
+      if (steps.length) {
+        if (cond.steps) {
+          throw new Error(
+            'Only one conditional block per HMR case can contain sub functions'
+          )
+        }
+        cond.steps = steps
+        cond.stepsIndex = cond.lines.length
+      }
+
       currentBranch = null
     }
 
@@ -275,15 +459,17 @@ const parseSpecString = (() => {
         } else if (char === '}') {
           currentBlocks--
         }
+        // guard: still in block after this line
         if (currentBlocks === 0) {
-          currentIndex += 1 // for '}'
           const left = line.substr(0, i)
-          if (!isEmpty(left)) {
-            currentBranch.push(left)
-          } else {
-            currentIndex += left.length
-          }
+          pushBranchLine(left)
+          // if (!isEmpty(left)) {
+          //   pushBranchLine(left)
+          // } else {
+          //   currentIndex += left.length
+          // }
           closeBranch()
+          // currentIndex += 1 // for '}'
           const right = line.substr(i + 1)
           if (!isEmpty(right)) {
             pushLine(right)
@@ -294,11 +480,12 @@ const parseSpecString = (() => {
         }
       })
       if (!closed) {
-        currentBranch.push(line)
+        pushBranchLine(line)
       }
     }
 
     lines.forEach(line => {
+      // console.log(currentIndex, `line "${line}"`)
       // guard: inside a conditional branch
       if (currentBranch) {
         parseBranchLine(line)
@@ -308,39 +495,53 @@ const parseSpecString = (() => {
       const condMatch = condRegex.exec(line)
       if (condMatch) {
         const [, indent, label, content] = condMatch
-        currentIndex += line.length - ((content && content.length) || 0)
-        currentStartIndex = currentIndex
+        // currentIndex += line.length - ((content && content.length) || 0)
+        // currentStartIndex = currentIndex
+        // // left indent will be fed to condition again, so we rewing a bit
+        // currentIndex -= indent.length
+
+        from = currentIndex + line.length - ((content && content.length) || 0)
+
         // left indent will be fed to condition again, so we rewing a bit
-        currentIndex -= indent.length
+        // currentIndex -= indent.length
         if (content && content[0] === '{') {
-          // multi line condition
+          currentIndex = from
+          // condition block (multiline)
           currentIndex += 1 // for '{'
-          openBranch(label, indent + content.substr(1))
+          // openBranch(label, indent + content.substr(1))
+          openBranch(label, content.substr(1))
         } else {
           // single line condition
-          pushCondition(label, indent + (content || ''))
+          const cond = resolveCondition(label)
+          const string = indent + (content || '')
+          if (!isEmpty(string)) {
+            cond.lines.push(string)
+          }
+          // subs
+          const to = from + ((content && content.length) || 0) + 1
+          consumeRootFunctions(cond, from, to)
+          // update index
+          currentIndex += line.length
+          currentIndex += 1 // for '\n'
         }
-        currentIndex += 1 // for '\n'
         return
       }
+      // case: default
       pushLine(line)
     })
 
     // case: parsing expectations
-    if (parseOrder) {
-      const result = { order: labelOrder }
+    if (isExpectations) {
+      const result = { order: [...labelOrder] }
       if (Object.keys(conditions).length === 0) {
         return result
       }
       return {
         ...result,
-        conditions: Object.fromEntries(
-          Object.entries(conditions).map(([label, { lines, subs }]) => [
+        cases: Object.fromEntries(
+          Object.entries(conditions).map(([label, cond]) => [
             label,
-            {
-              html: lines.join('\n'),
-              subs,
-            },
+            compileExpectCase(cond),
           ])
         ),
       }
@@ -357,9 +558,9 @@ const parseSpecString = (() => {
     return {
       ...result,
       ...Object.fromEntries(
-        Object.entries(conditions).map(([label, { lines }]) => [
+        Object.entries(conditions).map(([label, cond]) => [
           label,
-          lines.join('\n'),
+          compileFileCondition(cond),
         ])
       ),
     }
@@ -399,14 +600,14 @@ const parseSpecString = (() => {
 
     const parseExpects = lines => {
       maybeEndFile()
-      const { order, conditions } = parseConditions(
+      const { order, cases } = parseConditions(
         lines,
         specString,
         parsedLength,
         functions,
         true
       )
-      return order.map(label => [label, conditions[label]])
+      return order.map(label => [label, cases[label]])
     }
 
     specLines.some((line, i) => {
@@ -439,39 +640,69 @@ const parseSpecString = (() => {
   }
 })()
 
-const parseExpect = expect => {
-  let html
-  const result = {}
-  if (typeof expect === 'function') {
-    result.fns = [expect]
-  } else if (typeof expect === 'string') {
-    html = expect
-  } else if (typeof expect) {
-    html = expect.html
-    if (expect.subs && expect.subs.length > 0) {
-      result.subs = expect.subs
-    }
+const parseRawExpectStep = expect => {
+  const type = typeof expect
+  switch (type) {
+    case 'function':
+      if (isGenerator(expect)) {
+        return { sub: expect }
+      } else {
+        return { function: expect }
+      }
+    case 'string':
+      return { html: expect }
+    case 'object':
+      return expect
+    default:
+      throw new Error(`Invalid expect argument (${typeof expect})`)
   }
-  if (html) {
-    result.html = normalizeHtml(html)
+}
+
+const parseExpectStep = expect => {
+  const result = parseRawExpectStep(expect)
+  if (result.html) {
+    result.html = normalizeHtml(result.html)
   }
   return result
+}
+
+const resolveExpect = (state, label) => {
+  const stringLabel = String(label)
+  const expect = state.expects.get(stringLabel)
+  if (!expect) {
+    const expect = { steps: [] }
+    state.expects.set(String(label), expect)
+    return expect
+  }
+  return expect
 }
 
 const addExpects = (state, expects) => {
   // guard: empty
   if (!expects) return
-  expects.forEach(([label, expect]) => {
-    const parsed = parseExpect(expect)
-    state.expects.set(String(label), parsed)
+  expects.forEach(([label, input]) => {
+    const step = parseExpectStep(input)
+    const expect = resolveExpect(state, label)
+    expect.steps.push(step)
   })
+}
+
+const addExpectHook = (state, hook, { label, sub }) => {
+  assert(hook === 'before' || hook === 'after')
+  const expect = resolveExpect(state, label)
+  expect[hook] = sub
 }
 
 const processSpec = (state, { specs, functions }) => {
   const parser = typeof specs === 'string' ? parseSpecString : parseSpecObject
   const result = parser(state, specs, functions)
   Object.assign(state.specs, result.specs)
-  addExpects(state, result.expects)
+  // --- expectations ---
+  // guard: no expects
+  if (!result.expects) return
+  result.expects.forEach(([label, expect]) => {
+    state.expects.set(String(label), expect)
+  })
 }
 
 const processPageProxy = (state, { method, args }) => {
@@ -492,6 +723,12 @@ const initEffectProcessor = (state, start) => async effect => {
 
     case cmd.SPEC:
       return processSpec(state, effect)
+
+    case cmd.EXPECT_BEFORE:
+      return addExpectHook(state, 'before', effect)
+
+    case cmd.EXPECT_AFTER:
+      return addExpectHook(state, 'after', effect)
 
     case cmd.EXPECT:
       addExpects(state, effect.expects)
@@ -577,6 +814,17 @@ const createTestHmr = (options = {}) => {
         templates: {},
         inits: {},
         specs: {},
+        // expects: Map([
+        //   ['label', {
+        //     before: fn*,
+        //     after: fn*,
+        //     steps: [
+        //       {fn: async fn},
+        //       {html: 'string'},
+        //       {sub: fn*},
+        //     ]
+        //   }]
+        // ])
         expects: new Map(),
         initSpecLabel: null,
         started: false,
@@ -623,7 +871,7 @@ const createTestHmr = (options = {}) => {
       await consume(gen, processInitEffect)
 
       if (!state.started && state.expects.size > 0) {
-        await start(commands.spec.flush())
+        await start(commands.spec.$$flush())
       }
     })
   }

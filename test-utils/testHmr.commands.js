@@ -4,6 +4,8 @@ const INIT = 'init'
 const TEMPLATES = 'templates'
 const SPEC = 'specs'
 const EXPECT = 'expect'
+const EXPECT_BEFORE = 'expect_before'
+const EXPECT_AFTER = 'expect_after'
 const FLUSH_EXPECTS = 'flush_expects'
 const DISCARD_EXPECTS = 'discard_expects'
 const CHANGE = 'changes'
@@ -43,7 +45,7 @@ const interpolateFunctions = (strings, values) => {
       if (typeof values[i] === 'function') {
         functions.push({ index: len, fn: values[i] })
       } else {
-        push(values[i])
+        push(String(values[i]))
       }
     }
   })
@@ -90,11 +92,23 @@ spec.expect = (label, expects) => {
   }
 }
 
-spec.flush = () => ({
+spec.before = (label, sub) => ({
+  type: EXPECT_BEFORE,
+  label,
+  sub,
+})
+
+spec.after = (label, sub) => ({
+  type: EXPECT_AFTER,
+  label,
+  sub,
+})
+
+spec.$$flush = () => ({
   type: FLUSH_EXPECTS,
 })
 
-spec.discard = () => ({
+spec.$$discard = () => ({
   type: DISCARD_EXPECTS,
 })
 
@@ -132,6 +146,8 @@ module.exports = {
   TEMPLATES,
   SPEC,
   EXPECT,
+  EXPECT_BEFORE,
+  EXPECT_AFTER,
   FLUSH_EXPECTS,
   DISCARD_EXPECTS,
   CHANGE,
