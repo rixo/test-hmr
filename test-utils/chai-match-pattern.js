@@ -7,6 +7,7 @@
 /* globals define */
 
 const chai = require('chai')
+const _set = require('lodash.set')
 
 ;(function(plugin) {
   if (
@@ -26,63 +27,83 @@ const chai = require('chai')
     chai.use(plugin)
   }
 })(function(chai) {
-  function matchPattern(expect, actual, path) {
+  const set = (obj, path, value) => {
+    if (path) {
+      _set(obj, path, value)
+    }
+  }
+
+  function matchPattern(expect, actual, path, result, errors) {
+    set(result, path, expect)
+
     // null value
     if (expect === null) {
       if (!(actual === null)) {
-        throw 'Expected to have null but got "' +
-          actual +
-          '" at path "' +
-          path +
-          '".'
+        errors.push(
+          'Expected to have null but got "' +
+            actual +
+            '" at path "' +
+            path +
+            '".'
+        )
+        return false
       }
-
       return true
     }
 
     // undefined expected value
     if (typeof expect == 'undefined') {
       if (typeof actual != 'undefined') {
-        throw 'Expected to have undefined but got "' +
-          actual +
-          '" at path "' +
-          path +
-          '".'
+        errors.push(
+          'Expected to have undefined but got "' +
+            actual +
+            '" at path "' +
+            path +
+            '".'
+        )
+        return false
       }
-
       return true
     }
 
     // scalar description
     if (/boolean|number|string/.test(typeof expect)) {
       if (expect != actual) {
-        throw 'Expected to have "' +
-          expect +
-          '" but got "' +
-          actual +
-          '" at path "' +
-          path +
-          '".'
+        errors.push(
+          'Expected to have "' +
+            expect +
+            '" but got "' +
+            actual +
+            '" at path "' +
+            path +
+            '".'
+        )
+        return false
       }
-
       return true
     }
 
     // regex
     if (expect instanceof RegExp) {
       if (!expect.test(actual)) {
-        throw `Expected to match ${expect} but got "${actual}" at path ${path}`
+        errors.push(
+          `Expected to match ${expect} but got "${actual}" at path ${path}`
+        )
+        return false
       }
+      set(result, path, actual)
+      return true
     }
 
     // array length
     if (Array.isArray(expect)) {
       if (!Array.isArray(actual)) {
-        throw `Expected to have array but got ${actual} at path ${path}`
-      }
-      if (expect.length !== actual.length) {
-        throw `Expected to have an array of length ${expect.length} but got` +
-          ` ${actual.length} at path ${path}`
+        errors.push(`Expected to have array but got ${actual} at path ${path}`)
+      } else if (expect.length !== actual.length) {
+        errors.push(
+          `Expected to have an array of length ${expect.length} but got` +
+            ` ${actual.length} at path ${path}`
+        )
       }
     }
 
@@ -90,31 +111,36 @@ const chai = require('chai')
     if (expect instanceof Date) {
       if (actual instanceof Date) {
         if (expect.getTime() != actual.getTime()) {
-          throw 'Expected to have date "' +
+          errors.push(
+            'Expected to have date "' +
+              expect.toISOString() +
+              '" but got ' +
+              '"' +
+              actual.toISOString() +
+              '" at path "' +
+              path +
+              '".'
+          )
+        }
+      } else {
+        errors.push(
+          'Expected to have date "' +
             expect.toISOString() +
             '" but got ' +
             '"' +
-            actual.toISOString() +
+            actual +
             '" at path "' +
             path +
             '".'
-        }
-      } else {
-        throw 'Expected to have date "' +
-          expect.toISOString() +
-          '" but got ' +
-          '"' +
-          actual +
-          '" at path "' +
-          path +
-          '".'
+        )
       }
     }
 
     if (actual === null) {
-      throw 'Expected to have an array/object but got null at path "' +
-        path +
-        '".'
+      errors.push(
+        `Expected to have an array/object but got null at path ${path}`
+      )
+      return false
     }
 
     // array/object description
@@ -123,28 +149,30 @@ const chai = require('chai')
         typeof actual[prop] == 'undefined' &&
         typeof expect[prop] != 'undefined'
       ) {
-        throw 'Expected "' +
-          prop +
-          '" field to be defined at path "' +
-          path +
-          '".'
+        errors.push(`Expected "${prop}" field to be defined at path ${path}`)
+      } else {
+        matchPattern(
+          expect[prop],
+          actual[prop],
+          path + (path ? '.' : '') + prop,
+          result,
+          errors
+        )
       }
-
-      matchPattern(
-        expect[prop],
-        actual[prop],
-        path + (path == '.' ? '' : '.') + prop
-      )
     }
-
-    return true
   }
 
   chai.Assertion.addMethod('matchPattern', function(expect) {
-    try {
-      matchPattern(expect, this._obj, '.')
-    } catch (msg) {
-      this.assert(false, msg, undefined, expect, this._obj, true)
+    const result = Array.isArray(expect) ? [] : {}
+    const errors = []
+    matchPattern(expect, this._obj, '', result, errors)
+    if (errors.length > 0) {
+      let msg = errors.shift()
+      if (errors.length > 0) {
+        msg += ` (+ ${errors.length} more)`
+      }
+      // this.assert(false, msg, undefined, expect, this._obj, true)
+      this.assert(false, msg, undefined, result, this._obj, true)
     }
   })
 
