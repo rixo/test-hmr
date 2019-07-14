@@ -14,13 +14,13 @@ Spec
 File "file spec"
   = _ cmd:FileCommandLine content:FileContent { return {...cmd, content} }
 
-FileContent
+FileContent "file content"
   = parts:(Condition / Text)* { return { ...pos(), parts } }
 
-Text
-  = (!Command Line)+ { return { text: text(), ...pos() } }
+Text "text block"
+  = (!FileCommand Line)+ { return { text: text(), ...pos() } }
 
-Command
+FileCommand
   = File
   / Condition
 
