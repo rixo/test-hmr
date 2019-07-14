@@ -6,8 +6,21 @@ const assert = require('assert')
 const { writeHmr, loadPage } = require('.')
 const normalizeHtml = require('./normalizeHtml')
 
-const cmd = require('./testHmr.commands')
-const { commands } = cmd
+const {
+  commands,
+  DEBUG,
+  TEMPLATES,
+  INIT,
+  SPEC,
+  EXPECT,
+  EXPECT_BEFORE,
+  EXPECT_AFTER,
+  CHANGE,
+  FLUSH_EXPECTS,
+  DISCARD_EXPECTS,
+  PAGE,
+  INNER_TEXT,
+} = require('./testHmr.commands')
 
 const nullLabel = Symbol('NULL LABEL')
 
@@ -715,26 +728,26 @@ const processPageProxy = (state, { method, args }) => {
 
 const initEffectProcessor = (state, start) => async effect => {
   switch (effect.type) {
-    case cmd.DEBUG:
+    case DEBUG:
       return state
 
-    case cmd.TEMPLATES:
+    case TEMPLATES:
       return processTemplates(state, effect)
 
-    case cmd.SPEC:
+    case SPEC:
       return processSpec(state, effect)
 
-    case cmd.EXPECT_BEFORE:
+    case EXPECT_BEFORE:
       return addExpectHook(state, 'before', effect)
 
-    case cmd.EXPECT_AFTER:
+    case EXPECT_AFTER:
       return addExpectHook(state, 'after', effect)
 
-    case cmd.EXPECT:
+    case EXPECT:
       addExpects(state, effect.expects)
       break
 
-    case cmd.INIT: {
+    case INIT: {
       const changes = initChanges(state, effect)
       const files = renderInitFiles(state, changes)
       Object.assign(state.inits, files)
@@ -752,13 +765,13 @@ const effectProcessor = state => {
   } = state
   return async effect => {
     switch (effect.type) {
-      case cmd.DEBUG:
+      case DEBUG:
         return state
 
-      case cmd.TEMPLATES:
+      case TEMPLATES:
         return processTemplates(state, effect)
 
-      case cmd.CHANGE: {
+      case CHANGE: {
         const { changes } = effect
         if (typeof changes === 'string' || typeof changes === 'number') {
           const lastLabel = await consumeExpects(state, changes)
@@ -775,17 +788,17 @@ const effectProcessor = state => {
         break
       }
 
-      case cmd.FLUSH_EXPECTS:
+      case FLUSH_EXPECTS:
         return flushExpects(state)
 
       // allow bailing out, for testing
-      case cmd.DISCARD_EXPECTS:
+      case DISCARD_EXPECTS:
         return discardExpects(state)
 
-      case cmd.PAGE:
+      case PAGE:
         return processPageProxy(state, effect)
 
-      case cmd.INNER_TEXT:
+      case INNER_TEXT:
         return await state.page.$eval(effect.selector, el => el && el.innerText)
     }
   }
