@@ -41,24 +41,52 @@ Line
   / EOL
 
 Condition
-  = _ body:ConditionBody { return body }
+  = MultiLineCondition
+  / SingleLineCondition
 
-ConditionBody
-  = "::" condition:Label _ content:ConditionContent? {
+SingleLineCondition
+  = _ body:SingleConditionBody { return body }
+
+SingleConditionBody
+  = "::" condition:Label !"::" _ content:ConditionContent {
     return {
       condition,
-      text: content && content.text || undefined,
+      text: content.text,
       content,
       ...pos()
     }
   }
 
+MultiLineCondition
+  = _ body:MultiLineConditionBody { return body }
+
+MultiLineConditionBody
+  = label:MultiLineConditionLabel _ EOL
+    content:MultiLineConditionContent
+    EndOfMultiLineCondition
+    { return { condition: label, text: content.text, content, ...pos() } }
+
+EndOfMultilineCommand
+  = _ "::"
+
+MultiLineConditionLabel
+  = "::" _ label:$(!EndOfMultilineCommand .)+ _ "::" ":"* { return label }
+
+MultiLineConditionContent
+  = $ (!EndOfMultiLineCondition Line)* { return { text: text(), ...pos() } }
+
+EndOfMultiLineCondition
+  = (& MultiLineCondition / EndOfMultilineCommand ":"*)
+
 ConditionContent
-  = "{" text:$[^}]* "}" "\n"? { return { text, ...pos() } }
-  / text:Line { return { text, ...pos() } }
+  //= text:ConditionContentBlock "\n"? { return { text, ...pos() } }
+  = text:Line? { return { text, ...pos() } }
+
+ConditionContentBlock
+  = "{" text:$([^}] / ConditionContentBlock)* "}" { return text }
 
 Label
-  = $ [^ \t]+
+  = $ (![ \t] !"::" .)+
   / "'" [^']+ "'"
   / '"' [^"]+ '"'
 

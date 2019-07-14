@@ -3,6 +3,9 @@ const escapeRegExp = require('lodash.escaperegexp')
 
 const testParseWith = it => (source, ...args) => {
   it(source, async () => {
+    if (args.length < 1) {
+      throw new Error('No assertions')
+    }
     let ast
     try {
       ast = parse(source)
@@ -37,7 +40,7 @@ const _ = strings => {
   return new RegExp('\\s*' + escapeRegExp(text) + '\\s*')
 }
 
-describe.only('hmr spec parser.parse', () => {
+describe('hmr spec parser.parse', () => {
   it('is a function', () => {
     expect(typeof parse).to.equal('function')
   })
@@ -154,6 +157,27 @@ describe.only('hmr spec parser.parse', () => {
       testParse(
         `
           ---- file.txt ----
+          ::random cond1`,
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {
+                    condition: 'random',
+                    text: 'cond1',
+                  },
+                ],
+              },
+            },
+          ],
+        }
+      )
+
+      testParse(
+        `
+          ---- file.txt ----
           line1
           ::bob cond1
           line2
@@ -208,9 +232,9 @@ describe.only('hmr spec parser.parse', () => {
       testParse(
         `
           ---- file.txt ----
-          ::0 {
+          ::0::
             cond1
-          }`,
+          ::`,
         {
           files: [
             {
@@ -234,10 +258,36 @@ describe.only('hmr spec parser.parse', () => {
       testParse(
         `
           ---- file.txt ----
-          ::0 {
+          ::   randy spacy   ::
+            cond1
+          ::`,
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {
+                    condition: 'randy spacy',
+                    text: _`cond1`,
+                    content: {
+                      text: _`cond1`,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }
+      )
+
+      testParse(
+        `
+          ---- file.txt ----
+          ::0::
             cond1
             cond1-2
-          }`,
+          :::::`,
         {
           files: [
             {
@@ -259,9 +309,9 @@ describe.only('hmr spec parser.parse', () => {
         `
           ---- file.txt ----
           line before
-          ::0 {
+          :: 0 :::
             cond1
-          }
+          :::
         `,
         {
           files: [
@@ -290,18 +340,19 @@ describe.only('hmr spec parser.parse', () => {
           line 00
           ::0 cond0
           line before
-          ::1 {
+          :: 1 ::
             cond1
-          }
+          ::
           line after
-          ::2 { cond2 }
+          ::2 cond2
           ::3 cond3 multi word
           line zz
           ---- tmp/foo.txt ----
-          ::0 {
+          ::0::
             foo
-          }
-          ::1 { bar }
+          ::1::
+          bar
+          :::::
           baz
         `,
         {
@@ -430,9 +481,9 @@ describe.only('hmr spec parser.parse', () => {
         ****
         line before
         ::0 cond0
-        ::1 {
-          cond1
-        }
+        ::1::
+        cond1
+        ::
         line after
       `,
       {
@@ -450,8 +501,8 @@ describe.only('hmr spec parser.parse', () => {
               condition: '1',
               text: _`cond1`,
               start: 60,
-              end: 92,
-              content: { start: 64, end: 92 },
+              end: 90,
+              content: { start: 66, end: 80 },
             },
             { condition: undefined },
           ],
@@ -459,4 +510,73 @@ describe.only('hmr spec parser.parse', () => {
       }
     )
   })
+
+  describe('conditions', () => {
+    testParse(
+      `
+        ---- file1 ----
+        ::0::
+          if (false) {
+            console.log("}")
+          }
+        :::::
+        line after
+      `,
+      {
+        files: [
+          {
+            content: {
+              parts: [
+                {
+                  condition: '0',
+                  text: /\s*if \(false\) \{\s*console\.log\("\}"\)\s*\}\s*/,
+                  content: {
+                    text: /\s*if \(false\) \{\s*console\.log\("\}"\)\s*\}\s*/,
+                  },
+                },
+                {
+                  condition: undefined,
+                  text: _`line after`,
+                },
+              ],
+            },
+          },
+        ],
+      }
+    )
+
+    testParse(
+      `
+        ---- file1 ----
+        ::0::
+          cond0
+        ::1::
+          cond1
+        :::::
+        line after
+      `,
+      {
+        files: [
+          {
+            content: {
+              parts: [
+                {
+                  condition: '0',
+                  text: _`cond0`,
+                },
+                {
+                  condition: '1',
+                  text: _`cond1`,
+                },
+                {
+                  condition: undefined,
+                  text: _`line after`,
+                },
+              ],
+            },
+          },
+        ],
+      }
+    )
+  }) // conditions
 })
