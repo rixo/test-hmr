@@ -48,8 +48,12 @@ describe.only('hmr spec parser.parse', () => {
         `
           ---- file.txt ----
         `,
-        ast => ast.files[0],
-        { path: 'file.txt' }
+        ast => {
+          expect(ast.files)
+            .to.be.an('array')
+            .of.length(1)
+          expect(ast.files[0]).to.contain({ path: 'file.txt' })
+        }
       )
     })
 
@@ -290,15 +294,12 @@ describe.only('hmr spec parser.parse', () => {
           ::1 { bar }
           baz
         `,
-        ast => {
-          expect(ast.files, 'ast.files')
+        ({ files }) => {
+          expect(files, 'ast.files')
             .to.be.an('array')
             .of.length(2)
-          expect(ast.files[0]).to.include({ path: 'file.txt' })
-          expect(ast.files[1]).to.include({ path: 'tmp/foo.txt' })
-          return ast.files
-        },
-        files => {
+          expect(files[0]).to.include({ path: 'file.txt' })
+          expect(files[1]).to.include({ path: 'tmp/foo.txt' })
           expect(files[0].content.parts, 'file.content.parts[0]')
             .to.be.an('array')
             .of.length(8)
@@ -309,4 +310,123 @@ describe.only('hmr spec parser.parse', () => {
       )
     })
   }) // files
+
+  describe('expectations', () => {
+    testParse(
+      `
+        ---- file0 ----
+      `,
+      ast => {
+        expect(ast.expectations).to.not.exist
+      }
+    )
+
+    testParse(
+      `
+        ****
+      `,
+      ast => {
+        expect(ast.expectations).to.exist
+        expect(ast.expectations.parts)
+          .to.be.an('array')
+          .of.length(1)
+      }
+    )
+
+    testParse(`****`, ast => {
+      expect(ast.expectations).to.exist
+      expect(ast.expectations.parts)
+        .to.be.an('array')
+        .of.length(0)
+    })
+
+    testParse(
+      `
+        ****************************
+      `,
+      ast => {
+        expect(ast.expectations).to.exist
+        expect(ast.expectations.parts)
+          .to.be.an('array')
+          .of.length(1)
+      }
+    )
+
+    testParse(
+      `
+        ****
+        line 1
+        line 2
+      `,
+      ast => {
+        expect(ast.expectations).to.exist
+        expect(ast.expectations.parts)
+          .to.be.an('array')
+          .of.length(1)
+        expect(ast.expectations.parts[0].text).to.match(/\s*line 1\s*line 2\s*/)
+      }
+    )
+
+    testParse(
+      `
+        ****
+        ::0 cond0
+      `,
+      ({
+        expectations,
+        expectations: {
+          parts: [p1, p2],
+        },
+      }) => {
+        expect(expectations).to.exist
+        expect(expectations.parts)
+          .to.be.an('array')
+          .of.length(2)
+        expect(p1.condition).to.equal('0')
+        expect(p2.condition).to.not.exist
+        expect(p2.text).to.match(/\s*/)
+      }
+    )
+
+    // TODO make this meta test more granular
+    testParse(
+      `
+        ****
+        line before
+        ::0 cond0
+        ::1 {
+          cond1
+        }
+        line after
+      `,
+      ({
+        expectations,
+        expectations: {
+          parts: [, p1, p2, lastPart],
+        },
+      }) => {
+        expect(expectations).to.exist
+        expect(expectations.parts)
+          .to.be.an('array')
+          .of.length(4)
+
+        expect(p1.condition).to.equal('0')
+        expect(p1.text).to.match(/\s*cond0\s*/)
+        expect(p1.start).to.equal(42)
+        expect(p1.end).to.equal(52)
+        expect(p1.content.start).to.equal(46)
+        expect(p1.content.end).to.equal(52)
+
+        expect(p2.condition).to.equal('1')
+        expect(p2.text).to.match(/\s*cond1\s*/)
+        expect(p2.start).to.equal(60)
+        expect(p2.end).to.equal(92)
+        expect(p2.content.start).to.equal(64)
+        expect(p2.content.end).to.equal(92)
+
+        expect(lastPart.condition).to.not.exist
+        expect(lastPart.text).to.match(/\s*line after\s*/)
+      }
+    )
+  })
 })

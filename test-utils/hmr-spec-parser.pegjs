@@ -9,7 +9,12 @@ Start
   = Spec
 
 Spec
-  = __ files:File* { return { files } }
+  = __ files:File* expectations:Expectations? {
+    return {
+      files,
+      expectations
+    }
+  }
 
 File "file spec"
   = _ cmd:FileCommandLine content:FileContent { return {...cmd, content} }
@@ -17,19 +22,29 @@ File "file spec"
 FileContent "file content"
   = parts:(Condition / Text)* { return { ...pos(), parts } }
 
+Expectations "expectations"
+  = _ body:ExpectationsBody { return body }
+
+ExpectationsBody
+  = ExpectationSeparator EOC content:FileContent? { return content }
+
 Text "text block"
   = (!FileCommand Line)+ { return { text: text(), ...pos() } }
 
 FileCommand
   = File
   / Condition
+  / ExpectationSeparator
 
 Line
   = (!EOL.)+ EOL? { return text() }
   / EOL
 
 Condition
-  = _ "::" condition:Label _ content:ConditionContent? {
+  = _ body:ConditionBody { return body }
+
+ConditionBody
+  = "::" condition:Label _ content:ConditionContent? {
     return {
       condition,
       text: content && content.text || undefined,
@@ -49,8 +64,11 @@ Label
 
 FileCommandLine
   = '----''-'* _ path:PathName _ '-'* _ EOC {
-  	return {path}
+  	return { path }
   }
+
+ExpectationSeparator
+  = "****" "*"*
 
 PathName "path name"
   = '"' path:($ [^"]+) '"' { return path }
