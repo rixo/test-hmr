@@ -80,7 +80,7 @@ MultiLineConditionContent
   = $ (!EndOfMultiLineCondition Line)* { return { text: text(), ...pos() } }
 
 EndOfMultiLineCondition
-  = (& MultiLineCondition / EndOfMultilineCommand EOL?)
+  = (& MultiLineCondition / EndOfMultilineCommand EOL? / EOF)
 
 ConditionContent
   //= text:ConditionContentBlock "\n"? { return { text, ...pos() } }
@@ -100,7 +100,7 @@ FileCommandLine
   }
 
 ExpectationSeparator
-  = "****" "*"*
+  = _ "****" "*"*
 
 PathName "path name"
   = '"' path:($ [^"]+) '"' { return path }

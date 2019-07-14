@@ -35,12 +35,13 @@ const testParse = Object.assign(testParseWith(it), {
 })
 
 // _`foo` => /\s*foo\s*/
-const _ = strings => {
-  const text = Array.isArray(strings) ? strings.join('') : strings
-  return new RegExp('\\s*' + escapeRegExp(text) + '\\s*')
-}
+// _('foo', bar', 'baz') => /\s*foo\s*bar\s*baz\s*/
+const _ = strings =>
+  new RegExp('\\s*' + strings.map(escapeRegExp).join('\\s*') + '\\s*')
 
-describe.only('hmr spec parser.parse', () => {
+const __ = (...strings) => _(strings)
+
+describe('hmr spec parser.parse', () => {
   it('is a function', () => {
     expect(typeof parse).to.equal('function')
   })
@@ -526,7 +527,65 @@ describe.only('hmr spec parser.parse', () => {
         },
       }
     )
-  })
+
+    describe('with files', () => {
+      testParse(
+        `
+          ---- my.file ----
+          ****
+          ::0 cond0
+        `,
+        {
+          files: [
+            {
+              path: 'my.file',
+              content: {
+                parts: [],
+              },
+            },
+          ],
+          expectations: {
+            conditions: ['0'],
+            parts: [
+              { condition: '0', text: _`cond0` },
+              { condition: undefined, text: _`` },
+            ],
+          },
+        }
+      )
+
+      testParse(
+        `
+          ---- my.file ----
+          file content
+          ****
+          ::0::
+          cond0
+          ::1::
+          cond1
+          ::
+        `,
+        {
+          files: [
+            {
+              path: 'my.file',
+              content: {
+                parts: [{ text: _`file content` }],
+              },
+            },
+          ],
+          expectations: {
+            conditions: ['0', '1'],
+            parts: [
+              { condition: '0', text: _`cond0` },
+              { condition: '1', text: _`cond1` },
+              { condition: undefined, text: _`` },
+            ],
+          },
+        }
+      )
+    }) // expectations > with files
+  }) // expectations
 
   describe('conditions', () => {
     testParse(
@@ -642,6 +701,89 @@ describe.only('hmr spec parser.parse', () => {
             },
           },
         ],
+      }
+    )
+
+    testParse(
+      `
+        ---- file1 ----
+        ::0::
+          cond0
+        ::1::
+          cond1
+          line after
+      `,
+      {
+        files: [
+          {
+            content: {
+              conditions: ['0', '1'],
+              parts: [
+                {
+                  condition: '0',
+                  text: _`cond0`,
+                },
+                {
+                  condition: '1',
+                  text: __('cond1', 'line after'),
+                },
+              ],
+            },
+          },
+        ],
+      }
+    )
+
+    testParse(
+      `
+        ---- file1 ----
+        ::0::
+          cond0
+        ::1::
+          cond1
+          line after
+        *****
+      `,
+      {
+        files: [
+          {
+            content: {
+              conditions: ['0', '1'],
+              parts: [
+                {
+                  condition: '0',
+                  text: _`cond0`,
+                },
+                {
+                  condition: '1',
+                  text: __('cond1', 'line after'),
+                },
+              ],
+            },
+          },
+        ],
+      }
+    )
+
+    testParse(
+      `
+        ****
+        before
+        ::0::
+          step0
+        ::1::
+          step 1
+          after
+      `,
+      {
+        expectations: {
+          conditions: ['0', '1'],
+          parts: [
+            { condition: undefined, text: _`before` },
+            { condition: '0', text: _`step0` },
+            { condition: '1', text: __('step 1', 'after') },
+          ],
+        },
       }
     )
   }) // conditions
