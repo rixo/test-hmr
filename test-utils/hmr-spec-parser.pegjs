@@ -3,6 +3,10 @@
     const {start: {offset: start}, end: {offset: end}} = location()
     return {start, end}
   }
+
+  const conds = parts => [...new Set(
+    parts.map(({condition}) => condition).filter(Boolean)
+  )]
 }
 
 Start
@@ -20,7 +24,7 @@ File "file spec"
   = _ cmd:FileCommandLine content:FileContent { return {...cmd, content} }
 
 FileContent "file content"
-  = parts:(Condition / Text)* { return { ...pos(), parts } }
+  = parts:(Condition / Text)* { return { ...pos(), parts, conditions: conds(parts) } }
 
 Expectations "expectations"
   = _ body:ExpectationsBody { return body }
@@ -61,22 +65,22 @@ MultiLineCondition
   = _ body:MultiLineConditionBody { return body }
 
 MultiLineConditionBody
-  = label:MultiLineConditionLabel _ EOL
+  = label:MultiLineConditionLabel
     content:MultiLineConditionContent
     EndOfMultiLineCondition
     { return { condition: label, text: content.text, content, ...pos() } }
 
 EndOfMultilineCommand
-  = _ "::"
+  = _ "::" ":"* _
 
 MultiLineConditionLabel
-  = "::" _ label:$(!EndOfMultilineCommand .)+ _ "::" ":"* { return label }
+  = "::" _ label:$(!EndOfMultilineCommand .)+ EndOfMultilineCommand EOL { return label }
 
 MultiLineConditionContent
   = $ (!EndOfMultiLineCondition Line)* { return { text: text(), ...pos() } }
 
 EndOfMultiLineCondition
-  = (& MultiLineCondition / EndOfMultilineCommand ":"*)
+  = (& MultiLineCondition / EndOfMultilineCommand EOL?)
 
 ConditionContent
   //= text:ConditionContentBlock "\n"? { return { text, ...pos() } }

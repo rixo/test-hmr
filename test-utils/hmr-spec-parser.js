@@ -150,7 +150,7 @@ function peg$parse(input, options) {
       peg$c1 = peg$otherExpectation("file spec"),
       peg$c2 = function(cmd, content) { return {...cmd, content} },
       peg$c3 = peg$otherExpectation("file content"),
-      peg$c4 = function(parts) { return { ...pos(), parts } },
+      peg$c4 = function(parts) { return { ...pos(), parts, conditions: conds(parts) } },
       peg$c5 = peg$otherExpectation("expectations"),
       peg$c6 = function(body) { return body },
       peg$c7 = function(content) { return content },
@@ -837,30 +837,18 @@ function peg$parse(input, options) {
   }
 
   function peg$parseMultiLineConditionBody() {
-    var s0, s1, s2, s3, s4, s5;
+    var s0, s1, s2, s3;
 
     s0 = peg$currPos;
     s1 = peg$parseMultiLineConditionLabel();
     if (s1 !== peg$FAILED) {
-      s2 = peg$parse_();
+      s2 = peg$parseMultiLineConditionContent();
       if (s2 !== peg$FAILED) {
-        s3 = peg$parseEOL();
+        s3 = peg$parseEndOfMultiLineCondition();
         if (s3 !== peg$FAILED) {
-          s4 = peg$parseMultiLineConditionContent();
-          if (s4 !== peg$FAILED) {
-            s5 = peg$parseEndOfMultiLineCondition();
-            if (s5 !== peg$FAILED) {
-              peg$savedPos = s0;
-              s1 = peg$c15(s1, s4);
-              s0 = s1;
-            } else {
-              peg$currPos = s0;
-              s0 = peg$FAILED;
-            }
-          } else {
-            peg$currPos = s0;
-            s0 = peg$FAILED;
-          }
+          peg$savedPos = s0;
+          s1 = peg$c15(s1, s2);
+          s0 = s1;
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;
@@ -878,7 +866,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseEndOfMultilineCommand() {
-    var s0, s1, s2;
+    var s0, s1, s2, s3, s4;
 
     s0 = peg$currPos;
     s1 = peg$parse_();
@@ -891,8 +879,37 @@ function peg$parse(input, options) {
         if (peg$silentFails === 0) { peg$fail(peg$c13); }
       }
       if (s2 !== peg$FAILED) {
-        s1 = [s1, s2];
-        s0 = s1;
+        s3 = [];
+        if (input.charCodeAt(peg$currPos) === 58) {
+          s4 = peg$c16;
+          peg$currPos++;
+        } else {
+          s4 = peg$FAILED;
+          if (peg$silentFails === 0) { peg$fail(peg$c17); }
+        }
+        while (s4 !== peg$FAILED) {
+          s3.push(s4);
+          if (input.charCodeAt(peg$currPos) === 58) {
+            s4 = peg$c16;
+            peg$currPos++;
+          } else {
+            s4 = peg$FAILED;
+            if (peg$silentFails === 0) { peg$fail(peg$c17); }
+          }
+        }
+        if (s3 !== peg$FAILED) {
+          s4 = peg$parse_();
+          if (s4 !== peg$FAILED) {
+            s1 = [s1, s2, s3, s4];
+            s0 = s1;
+          } else {
+            peg$currPos = s0;
+            s0 = peg$FAILED;
+          }
+        } else {
+          peg$currPos = s0;
+          s0 = peg$FAILED;
+        }
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
@@ -994,42 +1011,13 @@ function peg$parse(input, options) {
           s3 = s4;
         }
         if (s3 !== peg$FAILED) {
-          s4 = peg$parse_();
+          s4 = peg$parseEndOfMultilineCommand();
           if (s4 !== peg$FAILED) {
-            if (input.substr(peg$currPos, 2) === peg$c12) {
-              s5 = peg$c12;
-              peg$currPos += 2;
-            } else {
-              s5 = peg$FAILED;
-              if (peg$silentFails === 0) { peg$fail(peg$c13); }
-            }
+            s5 = peg$parseEOL();
             if (s5 !== peg$FAILED) {
-              s6 = [];
-              if (input.charCodeAt(peg$currPos) === 58) {
-                s7 = peg$c16;
-                peg$currPos++;
-              } else {
-                s7 = peg$FAILED;
-                if (peg$silentFails === 0) { peg$fail(peg$c17); }
-              }
-              while (s7 !== peg$FAILED) {
-                s6.push(s7);
-                if (input.charCodeAt(peg$currPos) === 58) {
-                  s7 = peg$c16;
-                  peg$currPos++;
-                } else {
-                  s7 = peg$FAILED;
-                  if (peg$silentFails === 0) { peg$fail(peg$c17); }
-                }
-              }
-              if (s6 !== peg$FAILED) {
-                peg$savedPos = s0;
-                s1 = peg$c18(s3);
-                s0 = s1;
-              } else {
-                peg$currPos = s0;
-                s0 = peg$FAILED;
-              }
+              peg$savedPos = s0;
+              s1 = peg$c18(s3);
+              s0 = s1;
             } else {
               peg$currPos = s0;
               s0 = peg$FAILED;
@@ -1126,7 +1114,7 @@ function peg$parse(input, options) {
   }
 
   function peg$parseEndOfMultiLineCondition() {
-    var s0, s1, s2, s3;
+    var s0, s1, s2;
 
     s0 = peg$currPos;
     peg$silentFails++;
@@ -1142,23 +1130,9 @@ function peg$parse(input, options) {
       s0 = peg$currPos;
       s1 = peg$parseEndOfMultilineCommand();
       if (s1 !== peg$FAILED) {
-        s2 = [];
-        if (input.charCodeAt(peg$currPos) === 58) {
-          s3 = peg$c16;
-          peg$currPos++;
-        } else {
-          s3 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$c17); }
-        }
-        while (s3 !== peg$FAILED) {
-          s2.push(s3);
-          if (input.charCodeAt(peg$currPos) === 58) {
-            s3 = peg$c16;
-            peg$currPos++;
-          } else {
-            s3 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c17); }
-          }
+        s2 = peg$parseEOL();
+        if (s2 === peg$FAILED) {
+          s2 = null;
         }
         if (s2 !== peg$FAILED) {
           s1 = [s1, s2];
@@ -2006,6 +1980,10 @@ function peg$parse(input, options) {
       const {start: {offset: start}, end: {offset: end}} = location()
       return {start, end}
     }
+
+    const conds = parts => [...new Set(
+      parts.map(({condition}) => condition).filter(Boolean)
+    )]
 
 
   peg$result = peg$startRuleFunction();

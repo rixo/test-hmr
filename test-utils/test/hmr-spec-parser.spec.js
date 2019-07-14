@@ -40,7 +40,7 @@ const _ = strings => {
   return new RegExp('\\s*' + escapeRegExp(text) + '\\s*')
 }
 
-describe('hmr spec parser.parse', () => {
+describe.only('hmr spec parser.parse', () => {
   it('is a function', () => {
     expect(typeof parse).to.equal('function')
   })
@@ -120,6 +120,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['0'],
                 parts: [
                   {
                     condition: '0',
@@ -142,6 +143,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['0'],
                 parts: [
                   {
                     condition: '0',
@@ -163,6 +165,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['random'],
                 parts: [
                   {
                     condition: 'random',
@@ -187,6 +190,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['bob'],
                 parts: [
                   {},
                   {
@@ -214,6 +218,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['0'],
                 parts: [
                   {},
                   {
@@ -240,6 +245,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['0'],
                 parts: [
                   {
                     condition: '0',
@@ -266,6 +272,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['randy spacy'],
                 parts: [
                   {
                     condition: 'randy spacy',
@@ -293,6 +300,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['0'],
                 parts: [
                   {
                     condition: '0',
@@ -318,6 +326,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['0'],
                 parts: [
                   {},
                   {
@@ -360,6 +369,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'file.txt',
               content: {
+                conditions: ['0', '1', '2', '3'],
                 parts: [
                   {
                     condition: undefined,
@@ -391,6 +401,7 @@ describe('hmr spec parser.parse', () => {
             {
               path: 'tmp/foo.txt',
               content: {
+                conditions: ['0', '1'],
                 parts: [
                   {
                     condition: '0',
@@ -426,6 +437,7 @@ describe('hmr spec parser.parse', () => {
       `,
       {
         expectations: {
+          conditions: [],
           parts: [{}],
         },
       }
@@ -433,6 +445,7 @@ describe('hmr spec parser.parse', () => {
 
     testParse(`****`, {
       expectations: {
+        conditions: [],
         parts: [],
       },
     })
@@ -443,6 +456,7 @@ describe('hmr spec parser.parse', () => {
       `,
       {
         expectations: {
+          conditions: [],
           parts: [{}],
         },
       }
@@ -456,6 +470,7 @@ describe('hmr spec parser.parse', () => {
       `,
       {
         expectations: {
+          conditions: [],
           parts: [{ text: /\s*line 1\s*line 2\s*/ }],
         },
       }
@@ -468,6 +483,7 @@ describe('hmr spec parser.parse', () => {
       `,
       {
         expectations: {
+          conditions: ['0'],
           parts: [
             { condition: '0', text: _`cond0` },
             { condition: undefined, text: _`` },
@@ -488,6 +504,7 @@ describe('hmr spec parser.parse', () => {
       `,
       {
         expectations: {
+          conditions: ['0', '1'],
           parts: [
             { condition: undefined },
             {
@@ -501,7 +518,7 @@ describe('hmr spec parser.parse', () => {
               condition: '1',
               text: _`cond1`,
               start: 60,
-              end: 90,
+              end: 91,
               content: { start: 66, end: 80 },
             },
             { condition: undefined },
@@ -526,6 +543,7 @@ describe('hmr spec parser.parse', () => {
         files: [
           {
             content: {
+              conditions: ['0'],
               parts: [
                 {
                   condition: '0',
@@ -559,6 +577,7 @@ describe('hmr spec parser.parse', () => {
         files: [
           {
             content: {
+              conditions: ['0', '1'],
               parts: [
                 {
                   condition: '0',
@@ -567,6 +586,53 @@ describe('hmr spec parser.parse', () => {
                 {
                   condition: '1',
                   text: _`cond1`,
+                },
+                {
+                  condition: undefined,
+                  text: _`line after`,
+                },
+              ],
+            },
+          },
+        ],
+      }
+    )
+
+    testParse(
+      `
+        ---- file1 ----
+        ::1 first cond
+        med
+        ::0::
+          cond0
+        ::1::
+          cond1
+        :::::
+        ::2 last cond
+        line after
+      `,
+      {
+        files: [
+          {
+            content: {
+              conditions: ['1', '0', '2'],
+              parts: [
+                { condition: '1', text: _`first cond` },
+                {
+                  condition: undefined,
+                  text: _`med`,
+                },
+                {
+                  condition: '0',
+                  text: _`cond0`,
+                },
+                {
+                  condition: '1',
+                  text: _`cond1`,
+                },
+                {
+                  condition: '2',
+                  text: _`last cond`,
                 },
                 {
                   condition: undefined,
