@@ -1,5 +1,4 @@
 const chai = require('chai')
-const sinonChai = require('sinon-chai')
 const sinon = require('sinon')
 const puppeteer = require('puppeteer')
 
@@ -13,7 +12,9 @@ const { DEBUG } = process.env
 
 const originalGlobals = {}
 
-chai.use(sinonChai)
+chai.use(require('sinon-chai'))
+chai.use(require('./chai-match-pattern'))
+
 const { expect } = chai
 
 const setGlobals = values => {

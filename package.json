@@ -27,6 +27,7 @@
     "fast-glob": "^3.0.4",
     "glob": "^7.1.4",
     "linkfs": "^2.1.0",
+    "lodash.escaperegexp": "^4.1.2",
     "memory-fs": "^0.4.1",
     "mocha": "^6.1.4",
     "mocha-unfunk-reporter": "^0.4.0",

@@ -1,4 +1,5 @@
 const { parse } = require('../hmr-spec-parser')
+const escapeRegExp = require('lodash.escaperegexp')
 
 const testParseWith = it => (source, ...args) => {
   it(source, async () => {
@@ -19,7 +20,7 @@ const testParseWith = it => (source, ...args) => {
       if (typeof arg === 'function') {
         cur = (await arg(cur, ast)) || cur
       } else {
-        expect(cur).to.deep.include(arg)
+        expect(cur).to.matchPattern(arg)
       }
     }
   })
@@ -30,6 +31,12 @@ const testParse = Object.assign(testParseWith(it), {
   skip: testParseWith(it.skip),
 })
 
+// _`foo` => /\s*foo\s*/
+const _ = strings => {
+  const text = Array.isArray(strings) ? strings.join('') : strings
+  return new RegExp('\\s*' + escapeRegExp(text) + '\\s*')
+}
+
 describe.only('hmr spec parser.parse', () => {
   it('is a function', () => {
     expect(typeof parse).to.equal('function')
@@ -37,22 +44,20 @@ describe.only('hmr spec parser.parse', () => {
 
   describe('files', () => {
     describe('command', () => {
-      testParse(`---- file.txt ----`, ast => {
-        expect(ast.files)
-          .to.be.an('array')
-          .of.length(1)
-        expect(ast.files[0]).to.contain({ path: 'file.txt' })
+      testParse(`---- file.txt ----`, {
+        files: [{ path: 'file.txt' }],
       })
 
       testParse(
         `
           ---- file.txt ----
         `,
-        ast => {
-          expect(ast.files)
-            .to.be.an('array')
-            .of.length(1)
-          expect(ast.files[0]).to.contain({ path: 'file.txt' })
+        {
+          files: [
+            {
+              path: 'file.txt',
+            },
+          ],
         }
       )
     })
@@ -62,11 +67,8 @@ describe.only('hmr spec parser.parse', () => {
         `
           ---- file.txt ----
           line1`,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(1)
-          expect(ast.files[0]).to.include({ path: 'file.txt' })
+        {
+          files: [{ path: 'file.txt' }],
         }
       )
       testParse(
@@ -75,11 +77,8 @@ describe.only('hmr spec parser.parse', () => {
           line1
           line2
         `,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(1)
-          expect(ast.files[0]).to.include({ path: 'file.txt' })
+        {
+          files: [{ path: 'file.txt' }],
         }
       )
     })
@@ -90,12 +89,8 @@ describe.only('hmr spec parser.parse', () => {
           ---- file.txt ----
           ---- file2.foo ----
         `,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(2)
-          expect(ast.files[0]).to.include({ path: 'file.txt' })
-          expect(ast.files[1]).to.include({ path: 'file2.foo' })
+        {
+          files: [{ path: 'file.txt' }, { path: 'file2.foo' }],
         }
       )
       testParse(
@@ -105,12 +100,8 @@ describe.only('hmr spec parser.parse', () => {
           ---- file2.foo ----
           line 2
         `,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(2)
-          expect(ast.files[0]).to.include({ path: 'file.txt' })
-          expect(ast.files[1]).to.include({ path: 'file2.foo' })
+        {
+          files: [{ path: 'file.txt' }, { path: 'file2.foo' }],
         }
       )
     })
@@ -121,18 +112,21 @@ describe.only('hmr spec parser.parse', () => {
           ---- file.txt ----
           ::0 cond1
         `,
-        ast => ast.files[0],
-        { path: 'file.txt' },
-        file => file.content.parts,
-        parts => {
-          expect(parts)
-            .to.be.an('array')
-            .of.length(2)
-        },
-        parts => parts[0],
-        parts0 => {
-          expect(parts0).to.include({ condition: '0' })
-          expect(parts0.content).to.include({ text: 'cond1\n' })
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {
+                    condition: '0',
+                    text: _`cond1`,
+                  },
+                  {},
+                ],
+              },
+            },
+          ],
         }
       )
 
@@ -140,19 +134,20 @@ describe.only('hmr spec parser.parse', () => {
         `
           ---- file.txt ----
           ::0 cond1`,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(1)
-        },
-        ast => ast.files[0],
-        { path: 'file.txt' },
-        file => {
-          expect(file.content.parts, 'file.content.parts')
-            .to.be.an('array')
-            .of.length(1)
-          expect(file.content.parts[0].condition).to.equal('0')
-          expect(file.content.parts[0].content).to.include({ text: 'cond1' })
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {
+                    condition: '0',
+                    text: 'cond1',
+                  },
+                ],
+              },
+            },
+          ],
         }
       )
 
@@ -160,22 +155,27 @@ describe.only('hmr spec parser.parse', () => {
         `
           ---- file.txt ----
           line1
-          ::0 cond1
+          ::bob cond1
           line2
         `,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(1)
-        },
-        ast => ast.files[0],
-        { path: 'file.txt' },
-        file => {
-          expect(file.content.parts, 'file.content.parts')
-            .to.be.an('array')
-            .of.length(3)
-          expect(file.content.parts[1].condition).to.equal('0')
-          expect(file.content.parts[1].content).to.include({ text: 'cond1\n' })
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {},
+                  {
+                    condition: 'bob',
+                    content: {
+                      text: 'cond1\n',
+                    },
+                  },
+                  {},
+                ],
+              },
+            },
+          ],
         }
       )
 
@@ -185,17 +185,21 @@ describe.only('hmr spec parser.parse', () => {
           line1
           ::0 cond1
           line2`,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(1)
-        },
-        ast => ast.files[0],
-        { path: 'file.txt' },
-        file => {
-          expect(file.content.parts, 'file.content.parts')
-            .to.be.an('array')
-            .of.length(3)
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {},
+                  {
+                    condition: '0',
+                  },
+                  {},
+                ],
+              },
+            },
+          ],
         }
       )
     }) // single line conditions
@@ -207,19 +211,23 @@ describe.only('hmr spec parser.parse', () => {
           ::0 {
             cond1
           }`,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(1)
-        },
-        ast => ast.files[0],
-        { path: 'file.txt' },
-        file => {
-          expect(file.content.parts, 'file.content.parts')
-            .to.be.an('array')
-            .of.length(1)
-          expect(file.content.parts[0].condition).to.equal('0')
-          expect(file.content.parts[0].content.text).to.match(/\s*cond1\s*/)
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {
+                    condition: '0',
+                    text: _`cond1`,
+                    content: {
+                      text: _`cond1`,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
         }
       )
 
@@ -230,21 +238,20 @@ describe.only('hmr spec parser.parse', () => {
             cond1
             cond1-2
           }`,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(1)
-        },
-        ast => ast.files[0],
-        { path: 'file.txt' },
-        file => {
-          expect(file.content.parts, 'file.content.parts')
-            .to.be.an('array')
-            .of.length(1)
-          expect(file.content.parts[0].condition).to.equal('0')
-          expect(file.content.parts[0].content.text).to.match(
-            /\s*cond1\s*cond1-2\s*/
-          )
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {
+                    condition: '0',
+                    text: /\s*cond1\s*cond1-2\s*/,
+                  },
+                ],
+              },
+            },
+          ],
         }
       )
 
@@ -256,19 +263,22 @@ describe.only('hmr spec parser.parse', () => {
             cond1
           }
         `,
-        ast => {
-          expect(ast.files, 'ast.files')
-            .to.be.an('array')
-            .of.length(1)
-          expect(ast.files[0]).to.include({ path: 'file.txt' })
-          return ast.files[0]
-        },
-        file => {
-          expect(file.content.parts, 'file.content.parts')
-            .to.be.an('array')
-            .of.length(3)
-          expect(file.content.parts[1].condition).to.equal('0')
-          expect(file.content.parts[1].content.text).to.match(/\s*cond1\s*/)
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {},
+                  {
+                    condition: '0',
+                    text: _`cond1`,
+                  },
+                  {},
+                ],
+              },
+            },
+          ],
         }
       )
     }) // multiline conditions
@@ -294,18 +304,56 @@ describe.only('hmr spec parser.parse', () => {
           ::1 { bar }
           baz
         `,
-        ({ files }) => {
-          expect(files, 'ast.files')
-            .to.be.an('array')
-            .of.length(2)
-          expect(files[0]).to.include({ path: 'file.txt' })
-          expect(files[1]).to.include({ path: 'tmp/foo.txt' })
-          expect(files[0].content.parts, 'file.content.parts[0]')
-            .to.be.an('array')
-            .of.length(8)
-          expect(files[1].content.parts, 'file.content.parts[1]')
-            .to.be.an('array')
-            .of.length(3)
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                parts: [
+                  {
+                    condition: undefined,
+                  },
+                  {
+                    condition: '0',
+                  },
+                  {
+                    condition: undefined,
+                  },
+                  {
+                    condition: '1',
+                  },
+                  {
+                    condition: undefined,
+                  },
+                  {
+                    condition: '2',
+                  },
+                  {
+                    condition: '3',
+                  },
+                  {
+                    condition: undefined,
+                  },
+                ],
+              },
+            },
+            {
+              path: 'tmp/foo.txt',
+              content: {
+                parts: [
+                  {
+                    condition: '0',
+                  },
+                  {
+                    condition: '1',
+                  },
+                  {
+                    condition: undefined,
+                  },
+                ],
+              },
+            },
+          ],
         }
       )
     })
@@ -325,30 +373,27 @@ describe.only('hmr spec parser.parse', () => {
       `
         ****
       `,
-      ast => {
-        expect(ast.expectations).to.exist
-        expect(ast.expectations.parts)
-          .to.be.an('array')
-          .of.length(1)
+      {
+        expectations: {
+          parts: [{}],
+        },
       }
     )
 
-    testParse(`****`, ast => {
-      expect(ast.expectations).to.exist
-      expect(ast.expectations.parts)
-        .to.be.an('array')
-        .of.length(0)
+    testParse(`****`, {
+      expectations: {
+        parts: [],
+      },
     })
 
     testParse(
       `
         ****************************
       `,
-      ast => {
-        expect(ast.expectations).to.exist
-        expect(ast.expectations.parts)
-          .to.be.an('array')
-          .of.length(1)
+      {
+        expectations: {
+          parts: [{}],
+        },
       }
     )
 
@@ -358,12 +403,10 @@ describe.only('hmr spec parser.parse', () => {
         line 1
         line 2
       `,
-      ast => {
-        expect(ast.expectations).to.exist
-        expect(ast.expectations.parts)
-          .to.be.an('array')
-          .of.length(1)
-        expect(ast.expectations.parts[0].text).to.match(/\s*line 1\s*line 2\s*/)
+      {
+        expectations: {
+          parts: [{ text: /\s*line 1\s*line 2\s*/ }],
+        },
       }
     )
 
@@ -372,23 +415,16 @@ describe.only('hmr spec parser.parse', () => {
         ****
         ::0 cond0
       `,
-      ({
-        expectations,
+      {
         expectations: {
-          parts: [p1, p2],
+          parts: [
+            { condition: '0', text: _`cond0` },
+            { condition: undefined, text: _`` },
+          ],
         },
-      }) => {
-        expect(expectations).to.exist
-        expect(expectations.parts)
-          .to.be.an('array')
-          .of.length(2)
-        expect(p1.condition).to.equal('0')
-        expect(p2.condition).to.not.exist
-        expect(p2.text).to.match(/\s*/)
       }
     )
 
-    // TODO make this meta test more granular
     testParse(
       `
         ****
@@ -399,33 +435,27 @@ describe.only('hmr spec parser.parse', () => {
         }
         line after
       `,
-      ({
-        expectations,
+      {
         expectations: {
-          parts: [, p1, p2, lastPart],
+          parts: [
+            { condition: undefined },
+            {
+              condition: '0',
+              text: _`cond0`,
+              start: 42,
+              end: 52,
+              content: { start: 46, end: 52 },
+            },
+            {
+              condition: '1',
+              text: _`cond1`,
+              start: 60,
+              end: 92,
+              content: { start: 64, end: 92 },
+            },
+            { condition: undefined },
+          ],
         },
-      }) => {
-        expect(expectations).to.exist
-        expect(expectations.parts)
-          .to.be.an('array')
-          .of.length(4)
-
-        expect(p1.condition).to.equal('0')
-        expect(p1.text).to.match(/\s*cond0\s*/)
-        expect(p1.start).to.equal(42)
-        expect(p1.end).to.equal(52)
-        expect(p1.content.start).to.equal(46)
-        expect(p1.content.end).to.equal(52)
-
-        expect(p2.condition).to.equal('1')
-        expect(p2.text).to.match(/\s*cond1\s*/)
-        expect(p2.start).to.equal(60)
-        expect(p2.end).to.equal(92)
-        expect(p2.content.start).to.equal(64)
-        expect(p2.content.end).to.equal(92)
-
-        expect(lastPart.condition).to.not.exist
-        expect(lastPart.text).to.match(/\s*line after\s*/)
       }
     )
   })
