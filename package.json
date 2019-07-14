@@ -12,14 +12,17 @@
     "test:self:debug": "mocha debug test-utils/bootstrap.js test-utils/test",
     "test:all": "mocha test-utils/bootstrap.js test-utils/test test",
     "test:all:watch": "E2E=0 npm run test:all -- --watch",
-    "test:all:debug": "mocha debug test-utils/bootstrap.js test-utils/test test"
+    "test:all:debug": "mocha debug test-utils/bootstrap.js test-utils/test test",
+    "parser": "npx pegjs test-utils/hmr-spec-parser.pegjs",
+    "parser:trace": "npx pegjs --trace test-utils/hmr-spec-parser.pegjs",
+    "parser:watch": "nodemon --exec 'npx pegjs test-utils/hmr-spec-parser.pegjs' -w test-utils/hmr-spec-parser.pegjs",
+    "parser:watch:trace": "nodemon --exec 'npx pegjs --trace test-utils/hmr-spec-parser.pegjs' -w test-utils/hmr-spec-parser.pegjs"
   },
   "author": "rixo <rixo@rixo.fr>",
   "license": "MIT",
   "dependencies": {
     "chai": "^4.2.0",
     "chai-spies": "^1.0.0",
-    "dedent": "^0.7.0",
     "express": "^4.17.1",
     "fast-glob": "^3.0.4",
     "glob": "^7.1.4",
@@ -35,6 +38,8 @@
     "unionfs": "^4.1.0"
   },
   "devDependencies": {
-    "@rixo/eslint-config": "^0.7.0-alpha.7"
+    "@rixo/eslint-config": "^0.7.0-alpha.7",
+    "dedent": "^0.7.0",
+    "pegjs": "^0.10.0"
   }
 }
