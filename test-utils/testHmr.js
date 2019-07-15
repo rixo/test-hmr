@@ -8,19 +8,19 @@ const normalizeHtml = require('./normalizeHtml')
 const { parseSpecString } = require('./parseHmrSpec')
 
 const {
-  commands,
-  DEBUG,
-  TEMPLATES,
-  INIT,
-  SPEC,
-  EXPECT,
-  EXPECT_BEFORE,
-  EXPECT_AFTER,
   CHANGE,
-  FLUSH_EXPECTS,
+  DEBUG,
   DISCARD_EXPECTS,
-  PAGE,
+  EXPECT,
+  EXPECT_AFTER,
+  EXPECT_BEFORE,
+  FLUSH_EXPECTS,
+  INIT,
   INNER_TEXT,
+  PAGE,
+  SPEC,
+  TEMPLATES,
+  commands,
 } = require('./testHmr.commands')
 
 const nullLabel = Symbol('NULL LABEL')
@@ -362,7 +362,7 @@ const createTestHmr = (options = {}) => {
     ...options,
   }
 
-  return (description, handler) => {
+  const testHmr = (description, handler) => {
     // resolve actual config
     const { it, reset, loadPage } = config
 
@@ -435,6 +435,8 @@ const createTestHmr = (options = {}) => {
       }
     })
   }
+
+  return testHmr
 }
 
 const testHmr = createTestHmr()
