@@ -57,6 +57,7 @@ SingleConditionBody
       condition,
       text: content.text,
       content,
+      block: false,
       ...pos()
     }
   }
@@ -68,7 +69,7 @@ MultiLineConditionBody
   = label:MultiLineConditionLabel
     content:MultiLineConditionContent
     EndOfMultiLineCondition
-    { return { condition: label, text: content.text, content, ...pos() } }
+    { return { condition: label, text: content.text, content, block: true, ...pos() } }
 
 EndOfMultilineCommand
   = _ "::" ":"* _
@@ -80,7 +81,7 @@ MultiLineConditionContent
   = $ (!EndOfMultiLineCondition Line)* { return { text: text(), ...pos() } }
 
 EndOfMultiLineCondition
-  = (& MultiLineCondition / EndOfMultilineCommand EOL? / EOF)
+  = (& Condition / EndOfMultilineCommand EOL? / EOF)
 
 ConditionContent
   //= text:ConditionContentBlock "\n"? { return { text, ...pos() } }
@@ -90,9 +91,9 @@ ConditionContentBlock
   = "{" text:$([^}] / ConditionContentBlock)* "}" { return text }
 
 Label
-  = $ (![ \t] !"::" .)+
-  / "'" [^']+ "'"
-  / '"' [^"]+ '"'
+  = "'" text:[^']+ "'" { return text }
+  / '"' text:[^"]+ '"' { return text }
+  / $( (!"::" [^ \t\n:]) (!"::" [^ \t\n:])* )
 
 FileCommandLine
   = '----''-'* _ path:PathName _ '-'* _ EOC {

@@ -786,5 +786,32 @@ describe('hmr spec parser.parse', () => {
         },
       }
     )
+
+    describe('{block}', () => {
+      testParse(
+        `
+          ---- file ----
+          ::0
+          ::0::
+          ::1::
+          ::1
+        `,
+        {
+          files: [
+            {
+              content: {
+                parts: [
+                  { condition: '0', block: false },
+                  { condition: '0', block: true },
+                  { condition: '1', block: true },
+                  { condition: '1', block: false },
+                  { condition: undefined, text: _`` },
+                ],
+              },
+            },
+          ],
+        }
+      )
+    }) // {block}
   }) // conditions
 })
