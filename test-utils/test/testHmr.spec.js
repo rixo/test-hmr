@@ -1,3 +1,5 @@
+const escapeRegExp = require('lodash.escaperegexp')
+
 const {
   testHmr: { create: createTestHmr },
   templates,
@@ -10,6 +12,11 @@ const {
 } = require('../../test-utils/testHmr')
 
 const noop = () => {}
+
+// _`foo` => /\s*foo\s*/
+// _('foo', bar', 'baz') => /\s*foo\s*bar\s*baz\s*/
+const _ = strings =>
+  new RegExp('\\s*' + strings.map(escapeRegExp).join('\\s*') + '\\s*')
 
 describe('test utils: testHmr', () => {
   let _it
@@ -157,13 +164,10 @@ describe('test utils: testHmr', () => {
         ---- file ----
         contents ${'part'}
       `
-      const contents = `
-        contents part
-      `
       const state = yield debug()
-      expect(state.specs).to.deep.equal({
+      expect(state.specs).to.matchPattern({
         file: {
-          '*': contents,
+          '*': _`contents part`,
         },
       })
     })
@@ -173,13 +177,11 @@ describe('test utils: testHmr', () => {
         ---- ether ----
         I just am.
       `)
-      const ether = `
-        I just am.
-      `
-      const state = yield debug()
-      expect(state.specs).to.deep.equal({
-        ether: {
-          '*': ether,
+      expect(yield debug()).to.matchPattern({
+        specs: {
+          ether: {
+            '*': _`I just am`,
+          },
         },
       })
     })
@@ -191,18 +193,14 @@ describe('test utils: testHmr', () => {
         ---- second ----
         I am just bellow.
       `)
-      const first = `
-        I am just above.`
-      const second = `
-        I am just bellow.
-      `
-      const state = yield debug()
-      expect(state.specs).to.deep.equal({
-        first: {
-          '*': first,
-        },
-        second: {
-          '*': second,
+      expect(yield debug()).to.matchPattern({
+        specs: {
+          first: {
+            '*': _`I am just above`,
+          },
+          second: {
+            '*': _`I am just bellow`,
+          },
         },
       })
     })
@@ -216,19 +214,14 @@ describe('test utils: testHmr', () => {
         ---- second ----
         I am just bellow.
       `)
-      const first = `
-        I am just above.
-      `
-      const second = `
-        I am just bellow.
-      `
-      const state = yield debug()
-      expect(state.specs).to.deep.equal({
-        first: {
-          '*': first,
-        },
-        second: {
-          '*': second,
+      expect(yield debug()).to.matchPattern({
+        specs: {
+          first: {
+            '*': _`I am just above`,
+          },
+          second: {
+            '*': _`I am just bellow`,
+          },
         },
       })
     })
@@ -242,29 +235,13 @@ describe('test utils: testHmr', () => {
         ::1 on 1
         bottom
       `)
-      const fooAny = `
-        top
-        middle
-        bottom
-      `
-      const foo0 = `
-        top
-        on 0
-        middle
-        bottom
-      `
-      const foo1 = `
-        top
-        middle
-        on 1
-        bottom
-      `
-      const state = yield debug()
-      expect(state.specs).to.deep.equal({
-        'foo.js': {
-          '*': fooAny,
-          0: foo0,
-          1: foo1,
+      expect(yield debug()).to.matchPattern({
+        specs: {
+          'foo.js': {
+            '*': _(['top', 'middle', 'bottom']),
+            '0': _(['top', 'on 0', 'middle', 'bottom']),
+            '1': _(['top', 'middle', 'on 1', 'bottom']),
+          },
         },
       })
     })
@@ -277,44 +254,31 @@ describe('test utils: testHmr', () => {
         top
         ::0 on 000
         middle
-        ::1 {
+        ::1::
           function foo() { console.log('bar') }
-        }
+        :::::
         bottom
         ---- second ----
         I am just bellow.
       `)
-      const first = `
-        I am just above.`
-      const second = `
-        I am just bellow.
-      `
-      const fooAny = `
-        top
-        middle
-        bottom`
-      const foo0 = `
-        top
-        on 000
-        middle
-        bottom`
-      const foo1 = `
-        top
-        middle
-          function foo() { console.log('bar') }
-        bottom`
-      const state = yield debug()
-      expect(state.specs).to.deep.equal({
-        first: {
-          '*': first,
-        },
-        second: {
-          '*': second,
-        },
-        'foo.js': {
-          '*': fooAny,
-          0: foo0,
-          1: foo1,
+      expect(yield debug()).to.matchPattern({
+        specs: {
+          first: {
+            '*': _`I am just above.`,
+          },
+          'foo.js': {
+            '*': _(['top', 'middle', 'bottom']),
+            '0': _(['top', 'on 000', 'middle', 'bottom']),
+            '1': _([
+              'top',
+              'middle',
+              "function foo() { console.log('bar') }",
+              'bottom',
+            ]),
+          },
+          second: {
+            '*': _`I am just bellow.`,
+          },
         },
       })
     })
@@ -325,23 +289,22 @@ describe('test utils: testHmr', () => {
         lorem ipsum
         ****
         before anything:
-        ::0 {
+        ::0::
           expect#0
-        }
+        ::
         ::1 expect#1
         after all
       `)
-      const lorem = `
-        lorem ipsum`
-      const state = yield debug()
-      expect([...state.expects]).to.deep.equal([
-        ['0', { steps: [{ html: 'before anything:\n expect#0\n after all' }] }],
-        ['1', { steps: [{ html: 'before anything:\n expect#1\n after all' }] }],
-      ])
-      expect(state.specs).to.deep.equal({
-        file: {
-          '*': lorem,
+      expect(yield debug()).to.matchPattern({
+        specs: {
+          file: {
+            '*': _`lorem ipsum`,
+          },
         },
+        expects: new Map([
+          ['0', { steps: [{ html: 'before anything: expect#0 after all' }] }],
+          ['1', { steps: [{ html: 'before anything: expect#1 after all' }] }],
+        ]),
       })
       yield spec.$$discard()
     })
@@ -350,7 +313,6 @@ describe('test utils: testHmr', () => {
       let sub0
       let sub1
       let sub2
-      const html = 'top\n \n bottom'
 
       const fakeSub = i =>
         Object.assign(function*() {}, {
@@ -365,16 +327,6 @@ describe('test utils: testHmr', () => {
       })
 
       hit('parses before & after hooks', function*() {
-        // DEBUG DEBUG DEBUG
-        // yield spec`
-        //   ---- file.ext ---
-        //   filled
-        //   ${(56, '')}********
-        //   ${(75, '')}top
-        //   ${(89, '')}::0 ${(93, sub0)}
-        //   ${(104, '')}::0 ${(108, sub1)}
-        //   ${(119, '')}bottom
-        // `
         yield spec`
           ---- file.ext ---
           filled
@@ -384,17 +336,18 @@ describe('test utils: testHmr', () => {
           ::0 ${sub1}
           bottom
         `
-        const state = yield debug()
-        expect([...state.expects]).to.deep.equal([
-          [
-            '0',
-            {
-              before: sub0,
-              after: sub1,
-              steps: [{ html: 'top\n bottom' }],
-            },
-          ],
-        ])
+        expect(yield debug()).to.matchPattern({
+          expects: new Map([
+            [
+              '0',
+              {
+                before: sub0,
+                after: sub1,
+                steps: [{ html: 'top bottom' }],
+              },
+            ],
+          ]),
+        })
         yield spec.$$discard()
       })
 
@@ -425,36 +378,38 @@ describe('test utils: testHmr', () => {
           ********
           top
           ::0 zero
-          ::1 {
+          ::1::
             ${sub0}
             first
             ${sub1}
             second
             ${sub2}
-          }
+          ::
           bottom
         `
         const state = yield debug()
-        expect([...state.expects]).to.deep.equal([
-          [
-            '0',
-            {
-              steps: [{ html: 'top\n zero\n bottom' }],
-            },
-          ],
-          [
-            '1',
-            {
-              steps: [
-                { sub: sub0 },
-                { html: 'top\n first\n bottom' },
-                { sub: sub1 },
-                { html: 'top\n second\n bottom' },
-                { sub: sub2 },
-              ],
-            },
-          ],
-        ])
+        expect(state.expects).to.matchPattern(
+          new Map([
+            [
+              '0',
+              {
+                steps: [{ html: 'top zero bottom' }],
+              },
+            ],
+            [
+              '1',
+              {
+                steps: [
+                  { sub: sub0 },
+                  { html: 'top first bottom' },
+                  { sub: sub1 },
+                  { html: 'top second bottom' },
+                  { sub: sub2 },
+                ],
+              },
+            ],
+          ])
+        )
         yield spec.$$discard()
       })
 
@@ -465,22 +420,22 @@ describe('test utils: testHmr', () => {
           ********
           top
           ::0 zero
-          ::1 {
+          ::1::
             ${sub0}
             first
             ${sub1}
             second
             ${sub2}
             last
-          }
+          ::
           bottom
         `
         const state = yield debug()
-        expect([...state.expects]).to.deep.equal([
+        expect([...state.expects]).to.matchPattern([
           [
             '0',
             {
-              steps: [{ html: 'top\n zero\n bottom' }],
+              steps: [{ html: 'top zero bottom' }],
             },
           ],
           [
@@ -488,11 +443,11 @@ describe('test utils: testHmr', () => {
             {
               steps: [
                 { sub: sub0 },
-                { html: 'top\n first\n bottom' },
+                { html: 'top first bottom' },
                 { sub: sub1 },
-                { html: 'top\n second\n bottom' },
+                { html: 'top second bottom' },
                 { sub: sub2 },
-                { html: 'top\n last\n bottom' },
+                { html: 'top last bottom' },
               ],
             },
           ],
@@ -502,45 +457,28 @@ describe('test utils: testHmr', () => {
 
       hit('parses multiple step subs on a single line', function*() {
         const sub3 = fakeSub(3)
-        const sub4 = fakeSub(4)
-        const sub5 = fakeSub(5)
-        // yield spec`
-        //   ---- file.ext ---
-        //   filled
-        //   ********
-        //   top
-        //   ::0 zero
-        //   ::1 {
-        //     ${sub0}
-        //     first
-        //     ${sub1}
-        //     second ${sub2} last ${sub3}
-        //     everlast
-        //   }
-        //   bottom
-        // `
         yield spec`
           ---- file.ext ---
           filled
           ********
           top
           ::0 zero
-          ::1 {${(113, '')}
+          ::1::
+            ${(113, '')}
             ${sub0}
             first
             ${sub1}
             second ${sub2} last ${sub3}
             everlast
-          }
+          ::
           bottom
         `
         const state = yield debug()
-        // console.log(JSON.stringify([...state.expects], false, 2))
-        expect([...state.expects]).to.deep.equal([
+        expect([...state.expects]).to.matchPattern([
           [
             '0',
             {
-              steps: [{ html: 'top\n zero\n bottom' }],
+              steps: [{ html: 'top zero bottom' }],
             },
           ],
           [
@@ -548,13 +486,13 @@ describe('test utils: testHmr', () => {
             {
               steps: [
                 { sub: sub0 },
-                { html: 'top\n first\n bottom' },
+                { html: 'top first bottom' },
                 { sub: sub1 },
-                { html: 'top\n second \n bottom' },
+                { html: 'top second bottom' },
                 { sub: sub2 },
-                { html: 'top\n last \n bottom' },
+                { html: 'top last bottom' },
                 { sub: sub3 },
-                { html: 'top\n everlast\n bottom' },
+                { html: 'top everlast bottom' },
               ],
             },
           ],
@@ -569,27 +507,27 @@ describe('test utils: testHmr', () => {
           filled
           ********
           top
-          ::0 {
+          ::0::
             f${sub0}i${sub1}rst
             ${sub2}${sub3}
             everlast
-          }
+          ::
           bottom
         `
         const state = yield debug()
-        expect([...state.expects]).to.deep.equal([
+        expect([...state.expects]).to.matchPattern([
           [
             '0',
             {
               steps: [
-                { html: 'top\n f\n bottom' },
+                { html: 'top f bottom' },
                 { sub: sub0 },
-                { html: 'top\ni\n bottom' },
+                { html: 'top i bottom' },
                 { sub: sub1 },
-                { html: 'top\nrst\n bottom' },
+                { html: 'top rst bottom' },
                 { sub: sub2 },
                 { sub: sub3 },
-                { html: 'top\n everlast\n bottom' },
+                { html: 'top everlast bottom' },
               ],
             },
           ],
@@ -606,145 +544,40 @@ describe('test utils: testHmr', () => {
           filled
           ********
           top
-          ::1 {
+          ::1::
             zip
-          }
           ::0 ${subBefore}
-          ::0 {
+          ::0::
             f${sub0}i${sub1}rst
             ${sub2}${sub3}
             everlast
-          }
           ::0 ${subAfter}
           bottom
         `
         const state = yield debug()
-        expect([...state.expects]).to.deep.equal([
-          ['1', { steps: [{ html: 'top\n zip\n bottom' }] }],
+        expect([...state.expects]).to.matchPattern([
+          ['1', { steps: [{ html: 'top zip bottom' }] }],
           [
             '0',
             {
               before: subBefore,
               after: subAfter,
               steps: [
-                { html: 'top\n f\n bottom' },
+                { html: 'top f bottom' },
                 { sub: sub0 },
-                { html: 'top\ni\n bottom' },
+                { html: 'top i bottom' },
                 { sub: sub1 },
-                { html: 'top\nrst\n bottom' },
+                { html: 'top rst bottom' },
                 { sub: sub2 },
                 { sub: sub3 },
-                { html: 'top\n everlast\n bottom' },
+                { html: 'top everlast bottom' },
               ],
             },
           ],
         ])
         yield spec.$$discard()
       })
-
-      hit.only('parses multiline sub steps', function*() {
-        const sub3 = fakeSub(3)
-        const subBefore = fakeSub('before')
-        const subAfter = fakeSub('after')
-        yield spec`
-          ---- App.svelte ----
-
-          ::0 <Child />
-          ::1 <Child />
-          ::2 <Child />
-
-          ********
-
-          <h2>
-            ::0 {
-              I am Crash
-              ${sub3}
-            }
-          </h2>
-        `
-        const state = yield debug()
-        console.log(JSON.stringify([...state.expects], false, 2))
-        // expect([...state.expects]).to.deep.equal([
-        //   ['1', { steps: [{ html: 'top\n zip\n bottom' }] }],
-        //   [
-        //     '0',
-        //     {
-        //       before: subBefore,
-        //       after: subAfter,
-        //       steps: [
-        //         { html: 'top\n f\n bottom' },
-        //         { sub: sub0 },
-        //         { html: 'top\ni\n bottom' },
-        //         { sub: sub1 },
-        //         { html: 'top\nrst\n bottom' },
-        //         { sub: sub2 },
-        //         { sub: sub3 },
-        //         { html: 'top\n everlast\n bottom' },
-        //       ],
-        //     },
-        //   ],
-        // ])
-        yield spec.$$discard()
-      })
-
-      // hit('are parsed in multi line conditions', function*() {
-      //   yield spec`
-      //     ---- file.ext ---
-      //     filled
-      //     ********
-      //     top
-      //     ::0 ${sub0}
-      //     ::1 {
-      //       ${sub1}
-      //     }
-      //     ::2 ${sub2}
-      //     bottom
-      //   `
-      //   const state = yield debug()
-      //   expect([...state.expects]).to.deep.equal([
-      //     ['0', { html, subs: [sub0] }],
-      //     ['1', { html, subs: [sub1] }],
-      //     ['2', { html, subs: [sub2] }],
-      //   ])
-      //   yield spec.$$discard()
-      // })
-      //
-      // hit('stress test', function*() {
-      //   const sub3 = fakeSub(3)
-      //   const sub4 = fakeSub(4)
-      //   const sub5 = fakeSub(5)
-      //   yield spec`
-      //     ---- file.ext ---
-      //     filled
-      //     ********
-      //     top
-      //     ::0 ${(93, sub0)}
-      //     ::1 ${(108, '')}{
-      //       ${(122, sub1)}
-      //     }
-      //     mid
-      //     ::2 {
-      //       LLL ${sub2} RRR
-      //     }
-      //     ::3 I am ${sub3} tired
-      //     ::4 {
-      //       ${sub4}
-      //       ${sub5}
-      //     }
-      //     bottom
-      //   `
-      //   const state = yield debug()
-      //   // console.log(JSON.stringify([...state.expects], false, 2))
-      //   expect([...state.expects]).to.deep.equal([
-      //     ['0', { html: 'top\n \n mid\n bottom', subs: [sub0] }],
-      //     ['1', { html: 'top\n \n mid\n bottom', subs: [sub1] }],
-      //     ['2', { html: 'top\n mid\n LLL RRR\n bottom', subs: [sub2] }],
-      //     ['3', { html: 'top\n mid\n I am tired\n bottom', subs: [sub3] }],
-      //     ['4', { html: 'top\n mid\n \n \n bottom', subs: [sub4, sub5] }],
-      //   ])
-      //   yield spec.$$discard()
-      // })
-    })
+    }) // expectation subs
 
     // kitchen sink
     hit('lets mix all styles for maximum expressivity', function*() {
@@ -753,9 +586,9 @@ describe('test utils: testHmr', () => {
         top
         ::0 on 000
         middle
-        ::1 {
+        ::1::
           function foo() { console.log('bar') }
-        }
+        ::
         bottom
         ---- Bar.svelte ----
         <h1>I am Bar</h1>
@@ -765,42 +598,33 @@ describe('test utils: testHmr', () => {
         ::1 <p>has arrived!</p>
       `)
 
-      // --- Files ---
-
-      const fooAny = `
-        top
-        middle
-        bottom`
-      const foo0 = `
-        top
-        on 000
-        middle
-        bottom`
-      const foo1 = `
-        top
-        middle
-          function foo() { console.log('bar') }
-        bottom`
-      const iAmBar = `
-        <h1>I am Bar</h1>`
       const state = yield debug()
-      expect(state.specs).to.deep.equal({
-        'foo.js': {
-          '*': fooAny,
-          0: foo0,
-          1: foo1,
+      expect(state).to.matchPattern({
+        // --- Files ---
+
+        specs: {
+          'foo.js': {
+            '*': _(['top', 'middle', 'bottom']),
+            0: _(['top', 'on 000', 'middle', 'bottom']),
+            1: _([
+              'top',
+              'middle',
+              "function foo() { console.log('bar') }",
+              'bottom',
+            ]),
+          },
+          'Bar.svelte': {
+            '*': _`<h1>I am Bar</h1>`,
+          },
         },
-        'Bar.svelte': {
-          '*': iAmBar,
-        },
+
+        // --- Expectations ---
+
+        expects: new Map([
+          ['0', { steps: [{ html: '<h1>Result...</h1>' }] }],
+          ['1', { steps: [{ html: '<h1>Result...</h1><p>has arrived!</p>' }] }],
+        ]),
       })
-
-      // --- Expectations ---
-
-      expect([...state.expects]).to.deep.equal([
-        ['0', { steps: [{ html: '<h1>Result...</h1>' }] }],
-        ['1', { steps: [{ html: '<h1>Result...</h1><p>has arrived!</p>' }] }],
-      ])
 
       yield spec.$$discard()
     })

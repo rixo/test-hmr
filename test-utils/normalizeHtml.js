@@ -7,6 +7,15 @@ const dedupSpaceRegex = / {2,}/g
 
 const normalizeHtml = html => {
   let result = html
+  // TODO This is very aggressive reformatting; it could break things that,
+  //   unfortunately, might also be worthy of testing for HMR (whitespaces...)
+  //   Maybe that should become an option of kind (or use a more respectfulj
+  //   sanitization method).
+  //
+  // NOTE Many tests (of test utils) depends on this stripping of newlines,
+  //   though.
+  //
+  result = result.replace(/\n+/g, ' ')
   result = result.trim()
   result = sanitizeHtml(result, {
     allowedTags: false,
