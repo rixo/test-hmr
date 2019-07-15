@@ -248,20 +248,19 @@ const mapAst = (ast, functions) => {
 
   if (ast.expectations) {
     result.expects = compileSteps(functions, ast.expectations)
-    // console.log(JSON.stringify(result, false, 2))
   }
 
   return result
 }
 
-const parseInlineSpec = (state, source, functions) => {
+const parseInlineSpec = (source, functions) => {
   const ast = parse(source, {
     startRule: 'Spec',
   })
   return mapAst(ast, functions)
 }
 
-const parseFullSpec = (state, source, functions) => {
+const parseFullSpec = (source, functions) => {
   const ast = parse(source, {
     startRule: 'FullSpec',
   })

@@ -34,14 +34,18 @@ describe('test utils: testHmr', () => {
       $eval: sinon.fake(),
     }
     loadPage = sinon.fake(async (url, callback) => callback(_page))
-    _testHmr = (title, handler, customizer) =>
+    _testHmr = (title, handler, customizer, executer) =>
       new Promise((resolve, reject) => {
         _it = sinon.fake(function(desc, handler) {
           const scope = { slow: noop }
-          return handler
-            .call(scope)
-            .then(resolve)
-            .catch(reject)
+          if (handler) {
+            return handler
+              .call(scope)
+              .then(resolve)
+              .catch(reject)
+          } else {
+            resolve({ skipped: true })
+          }
         })
         let options = {
           it: _it,
@@ -53,7 +57,11 @@ describe('test utils: testHmr', () => {
           options = customizer(options)
         }
         const testHmr = createTestHmr(options)
-        return testHmr(title, handler)
+        if (executer) {
+          return executer(testHmr)
+        } else {
+          return testHmr(title, handler)
+        }
       })
   })
 
@@ -916,6 +924,20 @@ describe('test utils: testHmr', () => {
       })
       expect(expects[0]).to.have.been.calledOnce
     })
+
+    it('runs steps sub functions', async () => {
+      const fakeSub = sinon.fake()
+      function* sub(...args) {
+        fakeSub(...args) // tracks calls for us
+      }
+      _page.$eval = sinon.fake(async () => 'html')
+      await _testHmr('kitchen sink', function*() {
+        yield this.spec.expect(0, 'html')
+        yield this.spec.expect(0, sub)
+        expect(fakeSub, 'sub').to.not.have.been.called
+      })
+      expect(fakeSub, 'sub').to.have.been.called
+    })
   })
 
   describe('yield spec.expect(int, string)', () => {
@@ -1210,6 +1232,85 @@ describe('test utils: testHmr', () => {
         const { started } = yield debug()
         expect(started).to.be.true
       }
+    })
+  })
+
+  describe('testHmr`...`', () => {
+    const runTest = wrapper => _testHmr('*under test*', null, null, wrapper)
+
+    it('can be used as a template literal', async () => {
+      await runTest(
+        testHmr => testHmr`
+          # my spec
+        `
+      )
+      expect(_it).to.have.been.calledOnce
+    })
+
+    it('marks tests with no assertions as skipped', async () => {
+      const result = await runTest(
+        testHmr => testHmr`
+          # my spec
+        `
+      )
+      expect(result && result.skipped, 'test has been skipped').to.be.true
+    })
+
+    it('throws on missing title', async () => {
+      let error
+      await runTest(
+        testHmr => testHmr`
+          ---- just-a-file ----
+        `
+      ).catch(err => {
+        error = err
+      })
+      expect(error).to.exist
+    })
+
+    it('runs simple assertions', async () => {
+      _page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
+      await runTest(
+        testHmr => testHmr`
+          # my spec
+          ---- my-file ----
+          <h1>I am file</h1>
+          ****
+          ::0 <h1>I am file</h1>
+        `
+      )
+      expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
+    })
+
+    it('runs assertion steps', async () => {
+      const sub = sinon.fake(function*() {})
+      {
+        const results = {
+          0: '<h1>I am file</h1>',
+          1: '<h2>I am step2</h2>',
+        }
+        let i = 0
+        _page.$eval = sinon.fake(async () => results[i++])
+      }
+      let error
+      await runTest(
+        testHmr => testHmr`
+          # my spec
+          ---- my-file ----
+          <h1>I am file</h1>
+          ****
+          ::0::
+            <h1>I am file</h1>
+            ${sub}
+            <h2>I am step2</h2>
+          ::
+        `
+      ).catch(err => {
+        error = err
+      })
+      expect(error, 'error').to.be.undefined
+      expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+      expect(sub, 'sub').to.have.been.calledOnce
     })
   })
 })

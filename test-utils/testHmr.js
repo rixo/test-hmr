@@ -5,7 +5,8 @@ const assert = require('assert')
 
 const { writeHmr, loadPage } = require('.')
 const normalizeHtml = require('./normalizeHtml')
-const { parseInlineSpec } = require('./hmr-spec')
+const interpolateFunctions = require('./interpolateFunctions')
+const { parseInlineSpec, parseFullSpec } = require('./hmr-spec')
 
 const {
   CHANGE,
@@ -22,6 +23,9 @@ const {
   TEMPLATES,
   commands,
 } = require('./testHmr.commands')
+
+// internal command
+const SET_SPEC = Symbol('SET_SPEC')
 
 const nullLabel = Symbol('NULL LABEL')
 
@@ -107,12 +111,21 @@ const assertExpect = async (state, expectation) => {
     await consumeSub(before, state.processEffect)
   }
   for (const step of steps) {
-    const { function: fn, html, before: beforeStep, after: afterStep } = step
+    const {
+      function: fn,
+      html,
+      sub,
+      before: beforeStep,
+      after: afterStep,
+    } = step
     if (beforeStep) {
       await consumeSub(beforeStep, state.processEffect)
     }
     if (fn) {
       await fn.call(commands)
+    }
+    if (sub) {
+      await consumeSub(sub, state.processEffect)
     }
     if (html) {
       const { page } = state
@@ -188,7 +201,7 @@ const processTemplates = (state, effect) => {
   Object.assign(state.templates, effect.templates)
 }
 
-const parseSpecObject = (state, specs) => {
+const parseSpecObject = specs => {
   const result = Object.fromEntries(
     Object.entries(specs).map(([file, spec]) => {
       if (typeof spec === 'string') {
@@ -253,16 +266,20 @@ const addExpectHook = (state, hook, { label, sub }) => {
   expect[hook] = sub
 }
 
-const processSpec = (state, { specs, functions }) => {
-  const parser = typeof specs === 'string' ? parseInlineSpec : parseSpecObject
-  const result = parser(state, specs, functions)
-  Object.assign(state.specs, result.specs)
+const setSpec = (state, ast) => {
+  Object.assign(state.specs, ast.specs)
   // --- expectations ---
   // guard: no expects
-  if (!result.expects) return
-  result.expects.forEach(([label, expect]) => {
+  if (!ast.expects) return
+  ast.expects.forEach(([label, expect]) => {
     state.expects.set(String(label), expect)
   })
+}
+
+const processSpec = (state, { specs, functions }) => {
+  const parser = typeof specs === 'string' ? parseInlineSpec : parseSpecObject
+  const ast = parser(specs, functions)
+  return setSpec(state, ast)
 }
 
 const processPageProxy = (state, { method, args }) => {
@@ -273,36 +290,41 @@ const processPageProxy = (state, { method, args }) => {
   }
 }
 
-const initEffectProcessor = (state, start) => async effect => {
-  switch (effect.type) {
+const initEffectProcessor = (state, start) => async command => {
+  switch (command.type) {
     case DEBUG:
       return state
 
     case TEMPLATES:
-      return processTemplates(state, effect)
+      return processTemplates(state, command)
 
     case SPEC:
-      return processSpec(state, effect)
+      return processSpec(state, command)
 
     case EXPECT_BEFORE:
-      return addExpectHook(state, 'before', effect)
+      return addExpectHook(state, 'before', command)
 
     case EXPECT_AFTER:
-      return addExpectHook(state, 'after', effect)
+      return addExpectHook(state, 'after', command)
 
     case EXPECT:
-      addExpects(state, effect.expects)
+      addExpects(state, command.expects)
       break
 
     case INIT: {
-      const changes = initChanges(state, effect)
+      const changes = initChanges(state, command)
       const files = renderInitFiles(state, changes)
       Object.assign(state.inits, files)
       break
     }
 
+    case SET_SPEC: {
+      setSpec(state, command.ast)
+      break
+    }
+
     default:
-      return await start(effect)
+      return await start(command)
   }
 }
 
@@ -351,92 +373,119 @@ const effectProcessor = state => {
   }
 }
 
+const runHmrTest = (config, description, handler) => {
+  // resolve actual config
+  const { it, reset, loadPage } = config
+
+  return it(description, async () => {
+    const gen = handler.call(commands)
+    const state = {
+      config,
+      pageUrl: '/',
+      templates: {},
+      inits: {},
+      specs: {},
+      // expects: Map([
+      //   ['label', {
+      //     before: fn*,
+      //     after: fn*,
+      //     steps: [
+      //       {fn: async fn},
+      //       {html: 'string'},
+      //       {sub: fn*},
+      //     ]
+      //   }]
+      // ])
+      expects: new Map(),
+      initSpecLabel: null,
+      started: false,
+    }
+
+    // init phase -> run phase
+    //
+    // reset HRM sources & set initial source files...
+    //
+    const initTest = async () => {
+      await reset(state.inits)
+      delete state.inits // free mem
+
+      // compile expectations
+      state.remainingExpects = [...state.expects]
+
+      if (state.initSpecLabel !== null) {
+        ensureFirstExpect(state, state.initSpecLabel)
+        await consumeExpects(state, state.initSpecLabel, true)
+      }
+    }
+
+    const start = async firstEffect => {
+      state.started = true
+
+      const processEffect = effectProcessor(state)
+
+      state.processEffect = processEffect
+
+      const inPage = async page => {
+        state.page = page
+        const firstValue = firstEffect && (await processEffect(firstEffect))
+        await consume(gen, processEffect, firstValue)
+        await flushExpects(state)
+      }
+
+      await initTest()
+
+      await loadPage(state.pageUrl, inPage)
+    }
+
+    const processInitEffect = initEffectProcessor(state, start)
+
+    await consume(gen, processInitEffect)
+
+    if (!state.started && state.expects.size > 0) {
+      await start()
+    }
+  })
+}
+
+const configDefaults = {
+  it,
+  loadPage,
+  // TODO remove dep on global
+  reset: (...args) => app.reset(...args),
+  writeHmr,
+}
+
 const createTestHmr = (options = {}) => {
   // config defaults
   const config = {
-    it,
-    loadPage,
-    // TODO remove dep on global
-    reset: (...args) => app.reset(...args),
-    writeHmr,
+    ...configDefaults,
     ...options,
   }
 
-  const testHmr = (description, handler) => {
-    // resolve actual config
-    const { it, reset, loadPage } = config
+  const testHmr = (description, handler) =>
+    runHmrTest(config, description, handler)
 
-    return it(description, async () => {
-      const gen = handler.call(commands)
-      const state = {
-        config,
-        pageUrl: '/',
-        templates: {},
-        inits: {},
-        specs: {},
-        // expects: Map([
-        //   ['label', {
-        //     before: fn*,
-        //     after: fn*,
-        //     steps: [
-        //       {fn: async fn},
-        //       {html: 'string'},
-        //       {sub: fn*},
-        //     ]
-        //   }]
-        // ])
-        expects: new Map(),
-        initSpecLabel: null,
-        started: false,
+  return (...args) => {
+    const [arg1, ...values] = args
+    if (Array.isArray(arg1)) {
+      // we are a template literal tag
+      const { source, functions } = interpolateFunctions(arg1, values)
+      const ast = parseFullSpec(source, functions)
+      const cfg = { ...config }
+      // if no assertions, mark test as skipped
+      if (!ast.expects) {
+        return config.it(ast.title)
       }
-
-      // init phase -> run phase
-      //
-      // reset HRM sources & set initial source files...
-      //
-      const initTest = async () => {
-        await reset(state.inits)
-        delete state.inits // free mem
-
-        // compile expectations
-        state.remainingExpects = [...state.expects]
-
-        if (state.initSpecLabel !== null) {
-          ensureFirstExpect(state, state.initSpecLabel)
-          await consumeExpects(state, state.initSpecLabel, true)
+      return runHmrTest(cfg, ast.title, function*() {
+        yield {
+          type: SET_SPEC,
+          ast,
         }
-      }
-
-      const start = async firstEffect => {
-        state.started = true
-
-        const processEffect = effectProcessor(state)
-
-        state.processEffect = processEffect
-
-        const inPage = async page => {
-          state.page = page
-          const firstValue = await processEffect(firstEffect)
-          await consume(gen, processEffect, firstValue)
-          await flushExpects(state)
-        }
-
-        await initTest()
-
-        await loadPage(state.pageUrl, inPage)
-      }
-
-      const processInitEffect = initEffectProcessor(state, start)
-
-      await consume(gen, processInitEffect)
-
-      if (!state.started && state.expects.size > 0) {
-        await start(commands.spec.$$flush())
-      }
-    })
+      })
+    } else {
+      return testHmr(...args)
+    }
   }
-
-  return testHmr
 }
 
 const testHmr = createTestHmr()
