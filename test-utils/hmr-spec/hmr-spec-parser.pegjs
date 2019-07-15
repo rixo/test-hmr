@@ -12,6 +12,9 @@
 Start
   = Spec
 
+FullSpec
+  = title:SpecTitle spec:Spec { return { title, ...spec } }
+
 Spec
   = __ files:File* expectations:Expectations? {
     return {
@@ -19,6 +22,9 @@ Spec
       expectations
     }
   }
+
+SpecTitle "title"
+  = __ "#" _ title:Line { return title.trim() }
 
 File "file spec"
   = _ cmd:FileCommandLine content:FileContent { return {...cmd, content} }

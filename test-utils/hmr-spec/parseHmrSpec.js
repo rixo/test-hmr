@@ -1,5 +1,6 @@
-const { parse: parseHmrSpec } = require('./hmr-spec-parser')
-const normalizeHtml = require('./normalizeHtml')
+const normalizeHtml = require('../normalizeHtml')
+
+const { parse } = require('./hmr-spec-parser')
 
 const emptyRegex = /^\s*$/
 
@@ -233,9 +234,9 @@ const compileSteps = (functions, { parts, conditions }) => {
   return entries
 }
 
-const parseSpecString = (state, specString, functions) => {
+// PEG grammar AST => Spec object
+const mapAst = (ast, functions) => {
   const result = {}
-  const ast = parseHmrSpec(specString)
 
   {
     const specs = {}
@@ -253,6 +254,25 @@ const parseSpecString = (state, specString, functions) => {
   return result
 }
 
+const parseInlineSpec = (state, source, functions) => {
+  const ast = parse(source, {
+    startRule: 'Spec',
+  })
+  return mapAst(ast, functions)
+}
+
+const parseFullSpec = (state, source, functions) => {
+  const ast = parse(source, {
+    startRule: 'FullSpec',
+  })
+  const spec = mapAst(ast, functions)
+
+  spec.title = ast.title
+
+  return spec
+}
+
 module.exports = {
-  parseSpecString,
+  parseInlineSpec,
+  parseFullSpec,
 }

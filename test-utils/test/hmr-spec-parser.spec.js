@@ -1,5 +1,17 @@
-const { parse } = require('../hmr-spec-parser')
+const { parse } = require('../hmr-spec/hmr-spec-parser')
 const escapeRegExp = require('lodash.escaperegexp')
+
+const parseSpec = (source, ...options) =>
+  parse(source, {
+    startRule: 'Spec',
+    ...options,
+  })
+
+const parseFullSpec = (source, ...options) =>
+  parse(source, {
+    startRule: 'FullSpec',
+    ...options,
+  })
 
 const testParseWith = it => (source, ...args) => {
   it(source, async () => {
@@ -8,7 +20,7 @@ const testParseWith = it => (source, ...args) => {
     }
     let ast
     try {
-      ast = parse(source)
+      ast = parseSpec(source)
     } catch (err) {
       if (err && err.location) {
         const {
@@ -43,7 +55,7 @@ const __ = (...strings) => _(strings)
 
 describe('hmr spec parser.parse', () => {
   it('is a function', () => {
-    expect(typeof parse).to.equal('function')
+    expect(typeof parseSpec).to.equal('function')
   })
 
   describe('files', () => {
@@ -814,4 +826,31 @@ describe('hmr spec parser.parse', () => {
       )
     }) // {block}
   }) // conditions
+
+  describe('full spec', () => {
+    it('accepts a title', () => {
+      const ast = parseFullSpec(`
+        # My Title
+      `)
+      expect(ast.title).to.equal('My Title')
+    })
+
+    it('throws when title is missing', () => {
+      const parse = () => {
+        parseFullSpec(`
+          ---- my-file ----
+        `)
+      }
+      expect(parse).to.throw('Expected title')
+    })
+
+    it('parses title when there are files', () => {
+      const ast = parseFullSpec(`
+        # My Title
+
+        ---- my.file ----
+      `)
+      expect(ast.title).to.equal('My Title')
+    })
+  })
 })

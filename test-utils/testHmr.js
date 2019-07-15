@@ -5,7 +5,7 @@ const assert = require('assert')
 
 const { writeHmr, loadPage } = require('.')
 const normalizeHtml = require('./normalizeHtml')
-const { parseSpecString } = require('./parseHmrSpec')
+const { parseInlineSpec } = require('./hmr-spec')
 
 const {
   CHANGE,
@@ -254,7 +254,7 @@ const addExpectHook = (state, hook, { label, sub }) => {
 }
 
 const processSpec = (state, { specs, functions }) => {
-  const parser = typeof specs === 'string' ? parseSpecString : parseSpecObject
+  const parser = typeof specs === 'string' ? parseInlineSpec : parseSpecObject
   const result = parser(state, specs, functions)
   Object.assign(state.specs, result.specs)
   // --- expectations ---
