@@ -34,6 +34,22 @@ const _set = require('lodash.set')
   }
 
   function matchPattern(expect, actual, path, result, errors) {
+    if (expect instanceof Map) {
+      if (actual instanceof Map) {
+        return matchPattern([...expect], [...actual], path, result, errors)
+      } else {
+        errors.push(
+          'Expected to have Map but got "' +
+            actual +
+            '" at path "' +
+            path +
+            '".'
+        )
+        set(result, path, expect)
+        return false
+      }
+    }
+
     set(result, path, expect)
 
     // null value
