@@ -1,5 +1,7 @@
 const assert = require('assert')
 
+const interpolateFunctions = require('./interpolateFunctions')
+
 const INIT = 'init'
 const TEMPLATES = 'templates'
 const SPEC = 'specs'
@@ -31,37 +33,12 @@ const interpolate = (strings, values) =>
     }, [])
     .join('')
 
-const interpolateFunctions = (strings, values) => {
-  let len = 0
-  const parts = []
-  const functions = []
-  const push = string => {
-    len += string.length
-    parts.push(string)
-  }
-  strings.forEach((string, i) => {
-    push(string)
-    if (values.length > i) {
-      if (typeof values[i] === 'function') {
-        functions.push({ index: len, fn: values[i] })
-      } else {
-        push(String(values[i]))
-      }
-    }
-  })
-  const specs = parts.join('')
-  return {
-    specs,
-    functions,
-  }
-}
-
 const spec = (arg, ...args) => {
   if (Array.isArray(arg)) {
-    const { specs, functions } = interpolateFunctions(arg, args)
+    const { source, functions } = interpolateFunctions(arg, args)
     return {
       type: SPEC,
-      specs,
+      specs: source,
       functions,
     }
   } else {
