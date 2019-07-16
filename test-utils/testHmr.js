@@ -7,7 +7,7 @@ const { writeHmr, loadPage } = require('.')
 const normalizeHtml = require('./normalizeHtml')
 const interpolateFunctions = require('./interpolateFunctions')
 const { parseInlineSpec, parseFullSpec, parseTitleOnly } = require('./hmr-spec')
-const { runSpecTagAsDescribe } = require('./config')
+const { runSpecTagAsDescribe, describeByStep } = require('./config')
 
 const {
   CHANGE,
@@ -37,8 +37,12 @@ const isGenerator = (() => {
   return fn => fn instanceof GeneratorFunction
 })()
 
+const IS_DEFERRED = Symbol('IS_DEFERRED')
+
 const Deferred = () => {
-  const deferred = {}
+  const deferred = {
+    [IS_DEFERRED]: true,
+  }
   deferred.promise = new Promise((resolve, reject) => {
     deferred.resolve = resolve
     deferred.reject = reject
@@ -126,7 +130,7 @@ const ensureFirstExpect = (state, label) => {
 
 const passIt = (its, key, handler) => {
   const promise = handler()
-  if (its) {
+  if (its && its[key]) {
     // NOTE mute the error, if we're running in a describe
     return promise
       .then(r => {
@@ -143,43 +147,72 @@ const assertExpect = async (state, expectation, cond) => {
   // its: test promises that we need to resolve (for tag spec as describe)
   const { its: { [cond]: its } = {} } = state.config
   const { before, after, steps = [] } = expectation
-  if (before) {
-    await consumeSub(before, state.processEffect)
-  }
-  let i = 0
-  for (const step of steps) {
-    const index = i++
-    await passIt(its, index, async () => {
-      const {
-        function: fn,
-        html,
-        sub,
-        before: beforeStep,
-        after: afterStep,
-      } = step
-      if (beforeStep) {
-        await consumeSub(beforeStep, state.processEffect)
+  let stepName = ''
+  try {
+    if (before) {
+      stepName = 'before'
+      await consumeSub(before, state.processEffect)
+    }
+    let i = 0
+    for (const step of steps) {
+      const index = i++
+      stepName = `step ${index}`
+      // eslint-disable-next-line no-loop-func
+      await passIt(its, index, async () => {
+        const {
+          function: fn,
+          html,
+          sub,
+          before: beforeStep,
+          after: afterStep,
+        } = step
+        if (beforeStep) {
+          stepName = `step ${index} (before)`
+          await consumeSub(beforeStep, state.processEffect)
+        }
+        if (fn) {
+          stepName = `step ${index} (sub)`
+          await fn.call(commands)
+        }
+        if (sub) {
+          stepName = `step ${index} (sub)`
+          await consumeSub(sub, state.processEffect)
+        }
+        if (html) {
+          stepName = `step ${index} (html)`
+          const { page } = state
+          const APP_ROOT_SELECTOR = '#app'
+          const contents = await page.$eval(
+            APP_ROOT_SELECTOR,
+            el => el.innerHTML
+          )
+          const actual = normalizeHtml(contents)
+          expect(actual).to.equal(html)
+        }
+        if (afterStep) {
+          stepName = `step ${index} (after)`
+          await consumeSub(afterStep, state.processEffect)
+        }
+      })
+    }
+    if (after) {
+      stepName = 'after'
+      await consumeSub(after, state.processEffect)
+    }
+    // case: spec tag as 1 it by condition (not step)
+    if (its && its[IS_DEFERRED]) {
+      its.resolve()
+    }
+  } catch (err) {
+    // case: spec tag as 1 it by condition (not step)
+    if (its && its[IS_DEFERRED]) {
+      if (steps.length > 1 && stepName) {
+        err.name = stepName
       }
-      if (fn) {
-        await fn.call(commands)
-      }
-      if (sub) {
-        await consumeSub(sub, state.processEffect)
-      }
-      if (html) {
-        const { page } = state
-        const APP_ROOT_SELECTOR = '#app'
-        const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
-        const actual = normalizeHtml(contents)
-        expect(actual).to.equal(html)
-      }
-      if (afterStep) {
-        await consumeSub(afterStep, state.processEffect)
-      }
-    })
-  }
-  if (after) {
-    consumeSub(after, state.processEffect)
+      its.reject(err)
+    } else {
+      throw err
+    }
   }
 }
 
@@ -530,10 +563,32 @@ const runAsDescribeTag = (config, strings, values) => {
       let abort = false
       const condEntries = ast.expects.map(([, expect], index) => {
         const steps = expect.steps
-        let stepEntries
-        const desc = `after update ${index} ${
+        const desc = `after update ${index}${
           expect.title ? ` (${expect.title})` : ''
         }`
+
+        if (!config.describeByStep) {
+          const deferred = Deferred()
+          const promise = deferred.promise.catch(err => {
+            deferred.error = err
+          })
+          config.it(desc, () => {
+            if (abort) {
+              this.skip()
+            } else {
+              return promise.then(() => {
+                const err = deferred.error
+                if (err) {
+                  abort = true
+                  throw err
+                }
+              })
+            }
+          })
+          return [index, deferred]
+        }
+
+        let stepEntries
         config.describe(desc, () => {
           stepEntries = steps.map((step, i) => {
             const deferred = Deferred()
@@ -615,6 +670,7 @@ const configDefaults = {
   reset: (...args) => app.reset(...args),
   writeHmr,
   runTagAsDescribe: runSpecTagAsDescribe,
+  describeByStep,
 }
 
 const createTestHmr = (options = {}) => {

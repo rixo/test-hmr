@@ -27,4 +27,5 @@ module.exports = {
   e2e: process.env.E2E,
 
   runSpecTagAsDescribe: true,
+  describeByStep: false,
 }

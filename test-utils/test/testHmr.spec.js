@@ -1372,10 +1372,11 @@ describe('test utils: testHmr', () => {
       })
     })
 
-    describe('run as mocha `describe`', () => {
+    describe('run as mocha `describe` with single `it` for each step', () => {
       const customizer = options => ({
         ...options,
         runTagAsDescribe: true,
+        describeByStep: true,
       })
       const runTest = wrapper =>
         _testHmr('*under test*', null, customizer, wrapper)
@@ -1402,7 +1403,8 @@ describe('test utils: testHmr', () => {
           `
         )
         expect(_describe, 'describe')
-          .to.have.been.calledWith('my spec')
+          .to.have.been.calledThrice //
+          .and.calledWith('my spec')
           .and.calledWith('after update 0')
           .and.calledWith('after update 1')
         expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
@@ -1423,12 +1425,53 @@ describe('test utils: testHmr', () => {
           `
         )
         expect(_describe, 'describe')
-          .to.have.been.calledTwice.and.calledWith('my spec')
-          .and.calledWith('initial initialisation')
+          .to.have.been.calledTwice //
+          .and.calledWith('my spec')
+          .and.calledWith('after update 0 (initial initialisation)')
         expect(_it, 'it')
-          .to.have.been.calledThrice.and.calledWith('step 0')
+          .to.have.been.calledThrice //
+          .and.calledWith('step 0')
           .and.calledWith('step 1')
           .and.calledWith('step 2')
+        expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+      })
+    })
+
+    describe('run as mocha `describe`', () => {
+      const customizer = options => ({
+        ...options,
+        runTagAsDescribe: true,
+        describeByStep: false,
+      })
+      const runTest = wrapper =>
+        _testHmr('*under test*', null, customizer, wrapper)
+
+      it('can be used as a template literal', async () => {
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+          `
+        )
+        expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
+      })
+
+      it('runs conditions with `it`', async () => {
+        _page.$eval.return(['<h1>I am file</h1>', '<h1>I am still</h1>'])
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+            ---- my-file ----
+            <h1>I am file</h1>
+            ****
+            ::0 <h1>I am file</h1>
+            ::1 <h1>I am still</h1>
+          `
+        )
+        expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
+        expect(_it, 'it')
+          .to.have.been.calledTwice //
+          .and.calledWith('after update 0')
+          .and.calledWith('after update 1')
         expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
       })
     })
