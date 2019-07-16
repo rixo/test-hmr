@@ -443,7 +443,7 @@ describe('hmr spec parser.parse', () => {
   describe('expectations', () => {
     testParse(
       `
-        ---- file0 ----
+        --- file0 ---
       `,
       ast => {
         expect(ast.expectations).to.not.exist
@@ -452,7 +452,7 @@ describe('hmr spec parser.parse', () => {
 
     testParse(
       `
-        ****
+        ***
       `,
       {
         expectations: {
@@ -462,7 +462,14 @@ describe('hmr spec parser.parse', () => {
       }
     )
 
-    testParse(`****`, {
+    testParse(`***`, {
+      expectations: {
+        conditions: [],
+        parts: [],
+      },
+    })
+
+    testParse(`* * *`, {
       expectations: {
         conditions: [],
         parts: [],
@@ -472,6 +479,18 @@ describe('hmr spec parser.parse', () => {
     testParse(
       `
         ****************************
+      `,
+      {
+        expectations: {
+          conditions: [],
+          parts: [{}],
+        },
+      }
+    )
+
+    testParse(
+      `
+        * * * * * * * *  *   *    *    *    *   *  * * ** * * *  *  * * * * * *
       `,
       {
         expectations: {

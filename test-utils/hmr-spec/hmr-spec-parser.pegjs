@@ -111,12 +111,12 @@ Label
   / $( (!"::" [^ \t\n:]) (!"::" [^ \t\n:])* )
 
 FileCommandLine
-  = '----''-'* _ path:PathName _ '-'* _ EOC {
+  = '---''-'* _ path:PathName _ '-'* _ EOC {
   	return { path }
   }
 
 ExpectationSeparator
-  = _ "****" "*"*
+  = _ "*" _ "*" _ ("*" _)*
 
 PathName "path name"
   = '"' path:($ [^"]+) '"' { return path }
