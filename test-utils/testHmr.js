@@ -663,7 +663,7 @@ const runAsItTag = (config, strings, values) => {
 const configDefaults = {
   it,
   describe,
-  describeSkip: describe.skip,
+  describeSkip: it.skip, // use `it` because skipped describe are not reported
   before,
   loadPage,
   // TODO remove dep on global
