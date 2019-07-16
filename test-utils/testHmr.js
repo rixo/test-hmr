@@ -552,6 +552,7 @@ const runAsDescribeTag = (config, strings, values) => {
   const { source, functions } = interpolateFunctions(strings, values)
   const { title } = parseTitleOnly(source)
   let ast
+  // we ought not to crash outside of a `it` block for good manners
   try {
     ast = parseFullSpec(source, functions)
   } catch (err) {
