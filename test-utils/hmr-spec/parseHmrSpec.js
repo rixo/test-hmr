@@ -271,7 +271,13 @@ const parseFullSpec = (source, functions) => {
   return spec
 }
 
+const parseTitleOnly = source =>
+  parse(source, {
+    startRule: 'TitleOnly',
+  })
+
 module.exports = {
   parseInlineSpec,
   parseFullSpec,
+  parseTitleOnly,
 }

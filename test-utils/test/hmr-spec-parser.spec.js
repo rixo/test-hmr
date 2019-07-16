@@ -13,6 +13,12 @@ const parseFullSpec = (source, ...options) =>
     ...options,
   })
 
+const parseTitleOnly = (source, ...options) =>
+  parse(source, {
+    startRule: 'TitleOnly',
+    ...options,
+  })
+
 const testParseWith = it => (source, ...args) => {
   it(source, async () => {
     if (args.length < 1) {
@@ -849,6 +855,22 @@ describe('hmr spec parser.parse', () => {
         # My Title
 
         ---- my.file ----
+      `)
+      expect(ast.title).to.equal('My Title')
+    })
+  })
+
+  describe('title only', () => {
+    it('parses the title', () => {
+      const ast = parseTitleOnly(`
+        # My Title`)
+      expect(ast.title).to.equal('My Title')
+    })
+
+    it('parses the title when there is gibberish after it', () => {
+      const ast = parseTitleOnly(`
+        # My Title
+        NOT ALLOWED BY GRAMMAR
       `)
       expect(ast.title).to.equal('My Title')
     })

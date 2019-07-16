@@ -23,6 +23,9 @@ Spec
     }
   }
 
+TitleOnly
+  = title:SpecTitle __ .* { return { title } }
+
 SpecTitle "title"
   = __ "#" _ title:Line { return title.trim() }
 

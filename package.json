@@ -13,8 +13,8 @@
     "test:all": "mocha test-utils/bootstrap.js test-utils/test test",
     "test:all:watch": "E2E=0 npm run test:all -- --watch",
     "test:all:debug": "mocha debug test-utils/bootstrap.js test-utils/test test",
-    "parser": "npx pegjs --allowed-start-rules Spec,FullSpec test-utils/hmr-spec/hmr-spec-parser.pegjs",
-    "parser:trace": "npx pegjs --trace test-utils/hmr-spec/hmr-spec-parser.pegjs",
+    "parser": "npx pegjs --allowed-start-rules Spec,FullSpec,TitleOnly test-utils/hmr-spec/hmr-spec-parser.pegjs",
+    "parser:trace": "npx pegjs --allowed-start-rules Spec,FullSpec,TitleOnly --trace test-utils/hmr-spec/hmr-spec-parser.pegjs",
     "parser:watch": "nodemon --exec 'npm run parser' -w test-utils/hmr-spec/hmr-spec-parser.pegjs",
     "parser:watch:trace": "nodemon --exec 'npm run parser:trace' -w test-utils/hmr-spec/hmr-spec-parser.pegjs"
   },

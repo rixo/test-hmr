@@ -34,17 +34,29 @@ describe('test utils: testHmr', () => {
       $eval: sinon.fake(),
     }
     loadPage = sinon.fake(async (url, callback) => callback(_page))
+    const result = {
+      skipped: false,
+    }
+    const skip = () => {
+      result.skipped = true
+    }
     _testHmr = (title, handler, customizer, executer) =>
       new Promise((resolve, reject) => {
         _it = sinon.fake(function(desc, handler) {
-          const scope = { slow: noop }
+          const scope = { slow: noop, skip }
           if (handler) {
             return handler
               .call(scope)
-              .then(resolve)
+              .then(value => {
+                resolve({
+                  ...result,
+                  result: value,
+                })
+              })
               .catch(reject)
           } else {
-            resolve({ skipped: true })
+            result.skipped = true
+            resolve(result)
           }
         })
         let options = {
