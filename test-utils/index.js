@@ -10,6 +10,7 @@ const { writeFiles, reset } = rcUtils
 // testing that, integration level...)
 const hmrReadyMessage = '[WDS] Hot Module Replacement enabled.'
 const hmrDoneMessage = '[HMR] App is up to date.'
+// const hmrCompileErrorMessage = '[WDS] Errors while compiling. Reload prevented.'
 
 const getInnerText = el => el.innerText
 
@@ -33,16 +34,38 @@ const loadPage = async (url, callback) => {
 
 const inPage = (...args) => () => loadPage(...args)
 
+const reportConsoleError = (page, reject, firstMsg, buffer = 100) => {
+  const messages = [firstMsg]
+  const onConsole = msg => {
+    if (msg.type() === 'error') {
+      messages.push(msg)
+    }
+  }
+  const flush = () => {
+    const msg = messages.map(msg => msg.text()).join('\n\n')
+    const error = new Error(msg)
+    error.name = 'ClientConsoleError'
+    reject(error)
+  }
+  page.on('console', onConsole)
+  setTimeout(() => {
+    page.removeListener('console', onConsole)
+    flush()
+  }, buffer)
+}
+
 const waitConsoleMessage = (page, text) =>
-  new Promise(resolve => {
-    const wait = () =>
-      page.once('console', msg => {
-        if (msg.text() === text) {
-          resolve()
-        } else {
-          wait()
-        }
-      })
+  new Promise((resolve, reject) => {
+    const onConsole = msg => {
+      if (msg.type() === 'error') {
+        reportConsoleError(page, reject, msg)
+      } else if (msg.text() === text) {
+        resolve()
+      } else {
+        wait()
+      }
+    }
+    const wait = () => page.once('console', onConsole)
     wait()
   })
 
