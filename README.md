@@ -60,6 +60,24 @@ HMR tests spin a real webpack dev server and puppeteer, so they're definitely in
 
 The self tests suite however is more oriented toward unit test level. For this reason, self tests that uses the browser are disabled when watching. Because they're more integration than unit, and they're slowing everything down, which can be annoying during dev of test utils.
 
+### Test detail level
+
+Use env variable `DETAIL` to control detail level of mocha reporting. This only works with the full spec `` testHmr`...` `` syntax (because there's no way to know the structure of the test in advance with the imperative syntax).
+
+Default is `1`.
+
+With `DETAIL=0`, each `testHmr` test uses a single `it`.
+
+With `DETAIL=1`, each HMR update uses a single `it`. The full test itself is wrapped in a `describe`.
+
+With `DETAIL=2`, each individual expectation step gets its own `it`.
+
+Example:
+
+```bash
+DETAILS=0 npm run test:watch
+```
+
 ## Structure
 
 ### `/app`
