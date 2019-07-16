@@ -2,6 +2,12 @@
 
 Test suite for Svelte 3 HMR.
 
+## Install
+
+```bash
+npm install && cd app && npm install
+```
+
 ## Quick start
 
 ### Run HMR tests
