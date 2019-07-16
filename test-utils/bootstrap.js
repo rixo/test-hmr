@@ -7,6 +7,7 @@ const { startWebpack } = require('../app/test-server')
 const { fastResetStrategy } = require('../test-utils/config')
 
 const config = require('./config')
+const testHmr = require('./testHmr')
 
 const { DEBUG } = process.env
 
@@ -105,7 +106,7 @@ const setupFastWebpack = () => {
 
 const setupWebpack = fastResetStrategy ? setupFastWebpack : setupDefaultWebpack
 
-setGlobals({ expect, sinon })
+setGlobals({ expect, sinon, testHmr })
 initSelfTests()
 setupWebpack()
 setupPuppeteer()
