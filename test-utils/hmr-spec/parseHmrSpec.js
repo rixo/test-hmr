@@ -52,7 +52,7 @@ const shiftFunctions = functions => ({ start, end }) => {
     while ((next = functions[0])) {
       const { index } = next
       if (index < start) {
-        throw new Error('Sub handler must be in condition')
+        throw new Error('Sub handler must be inside an assertion condition')
       }
       // if (index > to) { DEBUG DEBUG DEBUG
       if (index >= end) {
@@ -151,14 +151,12 @@ const compileSteps = (functions, { parts, conditions }) => {
   }
 
   const pushCond = (cond, part) => {
-    const item = getCond(cond)
+    const item = buckets[cond]
     const fns = shift(part)
     if (fns.length > 0) {
       if (part.block === true) {
         if (item.steps) {
-          throw new Error(
-            'Only a single condition block can have sub functions steps'
-          )
+          throw new Error('Only a single condition block can have sub steps')
         }
         item.steps = splitSteps(part, fns)
         item.stepsIndex = item.lines.length
@@ -167,21 +165,15 @@ const compileSteps = (functions, { parts, conditions }) => {
         fns.forEach(({ fn }) => {
           registerHook(item, fn)
         })
+        if (!isEmpty(part.text)) {
+          item.lines.push(part.text)
+        }
       } else {
         throw new Error('Invalid part: ' + JSON.stringify(part))
       }
     } else {
       item.lines.push(part.text)
     }
-  }
-
-  const getCond = condition => {
-    if (!buckets[condition]) {
-      buckets[condition] = {
-        steps: [],
-      }
-    }
-    return buckets[condition]
   }
 
   for (const part of parts) {
@@ -201,10 +193,20 @@ const compileSteps = (functions, { parts, conditions }) => {
     return html
   }
 
-  const spreadSteps = ({ lines, steps, stepsIndex }) => {
+  const spreadSteps = ({ condition, lines, steps, stepsIndex }) => {
     if (!steps) {
       const html = linesToHtml(lines)
       return [{ html }]
+    }
+    // sanity check
+    if (lines.length > 0) {
+      const hasHtmlStep = steps.some(({ text }) => text != null)
+      if (!hasHtmlStep) {
+        throw new Error(
+          `Condition "${condition}" has some HTML expectations, but no HTML` +
+            ' step: HTML expecations would be ignored'
+        )
+      }
     }
     const before = lines.slice(0, stepsIndex)
     const after = lines.slice(stepsIndex)
@@ -213,7 +215,7 @@ const compileSteps = (functions, { parts, conditions }) => {
       const { text, sub } = step
       if (sub) {
         result.push({ sub })
-      } else if (text) {
+      } else if (text != null) {
         const lines = [...before, text, ...after]
         const html = linesToHtml(lines)
         result.push({ html })
