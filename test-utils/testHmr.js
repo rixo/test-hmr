@@ -481,7 +481,7 @@ const runHandler = async (config, handler) => {
     //     before: fn*,
     //     after: fn*,
     //     steps: [
-    //       {fn: async fn},
+    //       {function: async fn},
     //       {html: 'string'},
     //       {sub: fn*},
     //     ]
@@ -566,7 +566,7 @@ const runAsDescribeTag = (config, strings, values) => {
   }
   // guard: only one update case => run as 'it'
   if (ast.expects.length === 1 && ast.expects[0][1].steps.length === 1) {
-    return config.it(title, async function() {
+    return config.it(title, function() {
       return runHandler(config, function*() {
         yield {
           type: SET_SPEC,
@@ -646,7 +646,7 @@ const runAsDescribeTag = (config, strings, values) => {
 const runAsItTag = (config, strings, values) => {
   const { source, functions } = interpolateFunctions(strings, values)
   const { title } = parseTitleOnly(source)
-  config.it(title, async function() {
+  config.it(title, function() {
     const ast = parseFullSpec(source, functions)
     if (!ast.expects) {
       this.skip()
