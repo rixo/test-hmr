@@ -1416,7 +1416,7 @@ describe('test utils: testHmr', () => {
             ---- my-file ----
             <h1>I am file</h1>
             ****
-            ::0::
+            ::0:: initial initialisation
               <h1>I am file</h1>
               ${function*() {}}
               <h2>I am still</h2>
@@ -1424,7 +1424,7 @@ describe('test utils: testHmr', () => {
         )
         expect(_describe, 'describe')
           .to.have.been.calledTwice.and.calledWith('my spec')
-          .and.calledWith('after update 0')
+          .and.calledWith('initial initialisation')
         expect(_it, 'it')
           .to.have.been.calledThrice.and.calledWith('step 0')
           .and.calledWith('step 1')

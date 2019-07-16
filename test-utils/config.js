@@ -26,5 +26,5 @@ module.exports = {
   // 0, or 'skip' -- default: true
   e2e: process.env.E2E,
 
-  runSpecTagAsDescribe: false,
+  runSpecTagAsDescribe: true,
 }

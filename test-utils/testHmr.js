@@ -528,16 +528,20 @@ const runAsDescribeTag = (config, strings, values) => {
     // nominal: run as 'describe'
     config.describe(title, function() {
       let abort = false
-      const condEntries = ast.expects.map((expect, cond) => {
-        const steps = expect[1].steps
+      const condEntries = ast.expects.map(([, expect], index) => {
+        const steps = expect.steps
         let stepEntries
-        config.describe(`after update ${cond}`, () => {
+        const desc = `after update ${index} ${
+          expect.title ? ` (${expect.title})` : ''
+        }`
+        config.describe(desc, () => {
           stepEntries = steps.map((step, i) => {
             const deferred = Deferred()
             const promise = deferred.promise.catch(err => {
               deferred.error = err
             })
-            config.it(`step ${i}`, function() {
+            const title = step.title || `step ${i}`
+            config.it(title, function() {
               if (abort) {
                 this.skip()
               } else {
@@ -553,7 +557,7 @@ const runAsDescribeTag = (config, strings, values) => {
             return [i, deferred]
           })
         })
-        return [cond, Object.fromEntries(stepEntries)]
+        return [index, Object.fromEntries(stepEntries)]
       })
       const its = Object.fromEntries(condEntries)
       config.before(() => {

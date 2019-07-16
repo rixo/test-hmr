@@ -152,6 +152,11 @@ const compileSteps = (functions, { parts, conditions }) => {
 
   const pushCond = (cond, part) => {
     const item = buckets[cond]
+    // title
+    if (part.title) {
+      item.title = part.title
+    }
+    // subs / lines
     const fns = shift(part)
     if (fns.length > 0) {
       if (part.block === true) {
@@ -230,9 +235,9 @@ const compileSteps = (functions, { parts, conditions }) => {
 
   const entries = conditions.map(cond => {
     const item = buckets[cond]
-    const { before, after } = item
+    const { before, after, title } = item
     const steps = spreadSteps(item)
-    return [cond, { steps, before, after }]
+    return [cond, { steps, before, after, title }]
   })
 
   return entries
