@@ -5,7 +5,7 @@ const {
   templates,
   spec,
   init,
-  debug,
+  $$debug,
   change,
   innerText,
   page,
@@ -107,7 +107,7 @@ describe('test utils: testHmr', () => {
 
   describe('yield debug()', () => {
     hit('returns current HMR test state', function*() {
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state).not.to.be.undefined
     })
   })
@@ -120,7 +120,7 @@ describe('test utils: testHmr', () => {
       yield templates({
         'first.js': tpl1,
       })
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.templates).to.deep.equal({
         'first.js': tpl1,
       })
@@ -135,7 +135,7 @@ describe('test utils: testHmr', () => {
       yield templates({
         'second.svelte': tpl2,
       })
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.templates).to.deep.equal({
         'first.js': tpl1,
         'second.svelte': tpl2,
@@ -148,7 +148,7 @@ describe('test utils: testHmr', () => {
       yield templates({
         'second.svelte': tpl2,
       })
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.templates).to.deep.equal({
         'first.js': tpl1,
         'second.svelte': tpl2,
@@ -159,7 +159,7 @@ describe('test utils: testHmr', () => {
   describe('yield spec({...})', () => {
     hit('can registers file specs', function*() {
       yield spec({ foo: 'FOO', bar: { 0: 'BAR' } })
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.specs).to.deep.equal({
         foo: { '*': 'FOO' },
         bar: { 0: 'BAR' },
@@ -169,7 +169,7 @@ describe('test utils: testHmr', () => {
     hit('can be called multiple times (before init)', function*() {
       yield spec({ foo: 'FOO', bar: { 0: 'BAR' } })
       yield spec({ baz: { '*': 'BAZ' } })
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.specs).to.deep.equal({
         foo: { '*': 'FOO' },
         bar: { 0: 'BAR' },
@@ -184,7 +184,7 @@ describe('test utils: testHmr', () => {
         ---- file ----
         contents ${'part'}
       `
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.specs).to.matchPattern({
         file: {
           '*': _`contents part`,
@@ -197,7 +197,7 @@ describe('test utils: testHmr', () => {
         ---- ether ----
         I just am.
       `)
-      expect(yield debug()).to.matchPattern({
+      expect(yield $$debug()).to.matchPattern({
         specs: {
           ether: {
             '*': _`I just am`,
@@ -213,7 +213,7 @@ describe('test utils: testHmr', () => {
         ---- second ----
         I am just bellow.
       `)
-      expect(yield debug()).to.matchPattern({
+      expect(yield $$debug()).to.matchPattern({
         specs: {
           first: {
             '*': _`I am just above`,
@@ -234,7 +234,7 @@ describe('test utils: testHmr', () => {
         ---- second ----
         I am just bellow.
       `)
-      expect(yield debug()).to.matchPattern({
+      expect(yield $$debug()).to.matchPattern({
         specs: {
           first: {
             '*': _`I am just above`,
@@ -255,7 +255,7 @@ describe('test utils: testHmr', () => {
         ::1 on 1
         bottom
       `)
-      expect(yield debug()).to.matchPattern({
+      expect(yield $$debug()).to.matchPattern({
         specs: {
           'foo.js': {
             '*': _(['top', 'middle', 'bottom']),
@@ -281,7 +281,7 @@ describe('test utils: testHmr', () => {
         ---- second ----
         I am just bellow.
       `)
-      expect(yield debug()).to.matchPattern({
+      expect(yield $$debug()).to.matchPattern({
         specs: {
           first: {
             '*': _`I am just above.`,
@@ -315,7 +315,7 @@ describe('test utils: testHmr', () => {
         ::1 expect#1
         after all
       `)
-      expect(yield debug()).to.matchPattern({
+      expect(yield $$debug()).to.matchPattern({
         specs: {
           file: {
             '*': _`lorem ipsum`,
@@ -356,7 +356,7 @@ describe('test utils: testHmr', () => {
           ::0 ${sub1}
           bottom
         `
-        expect(yield debug()).to.matchPattern({
+        expect(yield $$debug()).to.matchPattern({
           expects: new Map([
             [
               '0',
@@ -407,7 +407,7 @@ describe('test utils: testHmr', () => {
           ::
           bottom
         `
-        const state = yield debug()
+        const state = yield $$debug()
         expect(state.expects).to.matchPattern(
           new Map([
             [
@@ -450,7 +450,7 @@ describe('test utils: testHmr', () => {
           ::
           bottom
         `
-        const state = yield debug()
+        const state = yield $$debug()
         expect([...state.expects]).to.matchPattern([
           [
             '0',
@@ -493,7 +493,7 @@ describe('test utils: testHmr', () => {
           ::
           bottom
         `
-        const state = yield debug()
+        const state = yield $$debug()
         expect([...state.expects]).to.matchPattern([
           [
             '0',
@@ -534,7 +534,7 @@ describe('test utils: testHmr', () => {
           ::
           bottom
         `
-        const state = yield debug()
+        const state = yield $$debug()
         expect([...state.expects]).to.matchPattern([
           [
             '0',
@@ -574,7 +574,7 @@ describe('test utils: testHmr', () => {
           ::0 ${subAfter}
           bottom
         `
-        const state = yield debug()
+        const state = yield $$debug()
         expect([...state.expects]).to.matchPattern([
           ['1', { steps: [{ html: 'top zip bottom' }] }],
           [
@@ -618,7 +618,7 @@ describe('test utils: testHmr', () => {
         ::1 <p>has arrived!</p>
       `)
 
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state).to.matchPattern({
         // --- Files ---
 
@@ -654,7 +654,7 @@ describe('test utils: testHmr', () => {
     hit('accepts two args', function*() {
       yield spec.expect(0, '<p>foo</p>')
       yield spec.expect(1, 'Babar')
-      const state = yield debug()
+      const state = yield $$debug()
       expect([...state.expects]).to.deep.equal([
         ['0', { steps: [{ html: '<p>foo</p>' }] }],
         ['1', { steps: [{ html: 'Babar' }] }],
@@ -664,7 +664,7 @@ describe('test utils: testHmr', () => {
 
     hit('accepts a single array arg', function*() {
       yield spec.expect([[0, '<p>foo</p>'], [1, 'Babar']])
-      const state = yield debug()
+      const state = yield $$debug()
       expect([...state.expects]).to.deep.equal([
         ['0', { steps: [{ html: '<p>foo</p>' }] }],
         ['1', { steps: [{ html: 'Babar' }] }],
@@ -680,7 +680,7 @@ describe('test utils: testHmr', () => {
       yield spec.expect(1)`
         Babar
       `
-      const state = yield debug()
+      const state = yield $$debug()
       expect([...state.expects]).to.deep.equal([
         ['0', { steps: [{ html: '<p>foo</p>' }] }],
         ['1', { steps: [{ html: 'Babar' }] }],
@@ -691,7 +691,7 @@ describe('test utils: testHmr', () => {
     hit('accepts strings for html', function*() {
       yield spec.expect(0, 'foo')
       yield spec.expect(1, 'bar')
-      const state = yield debug()
+      const state = yield $$debug()
       expect([...state.expects]).to.deep.equal([
         ['0', { steps: [{ html: 'foo' }] }],
         ['1', { steps: [{ html: 'bar' }] }],
@@ -704,7 +704,7 @@ describe('test utils: testHmr', () => {
       const bar = async () => {}
       yield spec.expect(0, foo)
       yield spec.expect(1, bar)
-      const state = yield debug()
+      const state = yield $$debug()
       expect([...state.expects]).to.deep.equal([
         ['0', { steps: [{ function: foo }] }],
         ['1', { steps: [{ function: bar }] }],
@@ -717,7 +717,7 @@ describe('test utils: testHmr', () => {
       const bar = function* bar() {}
       yield spec.expect(0, foo)
       yield spec.expect(1, bar)
-      const state = yield debug()
+      const state = yield $$debug()
       expect([...state.expects]).to.deep.equal([
         ['0', { steps: [{ sub: foo }] }],
         ['1', { steps: [{ sub: bar }] }],
@@ -732,7 +732,7 @@ describe('test utils: testHmr', () => {
       yield spec.expect(1, 'bar')
       yield spec.expect(0, 'foo')
       yield spec.expect(1, bar)
-      const state = yield debug()
+      const state = yield $$debug()
       expect([...state.expects]).to.deep.equal([
         ['0', { steps: [{ function: foo }, { html: 'foo' }] }],
         ['1', { steps: [{ html: 'bar' }, { function: bar }] }],
@@ -748,7 +748,7 @@ describe('test utils: testHmr', () => {
         yield spec.expect(1, 'bar')
         yield spec.expect(0, 'foo')
         yield spec.before(1, bar)
-        const state = yield debug()
+        const state = yield $$debug()
         expect([...state.expects]).to.deep.equal([
           ['0', { before: foo, steps: [{ html: 'foo' }] }],
           ['1', { before: bar, steps: [{ html: 'bar' }] }],
@@ -791,7 +791,7 @@ describe('test utils: testHmr', () => {
         yield spec.expect(1, 'bar')
         yield spec.expect(0, 'foo')
         yield spec.after(1, bar)
-        const state = yield debug()
+        const state = yield $$debug()
         expect([...state.expects]).to.deep.equal([
           ['0', { after: foo, steps: [{ html: 'foo' }] }],
           ['1', { after: bar, steps: [{ html: 'bar' }] }],
@@ -829,12 +829,12 @@ describe('test utils: testHmr', () => {
     hit('compiles expectations on first non-init effect', function*() {
       yield spec.expect(0, '<p>foo</p>')
       {
-        const state = yield debug()
+        const state = yield $$debug()
         expect(state.remainingExpects).to.be.undefined
       }
       yield innerText('*')
       {
-        const state = yield debug()
+        const state = yield $$debug()
         expect(state.remainingExpects).to.deep.equal([
           ['0', { steps: [{ html: '<p>foo</p>' }] }],
         ])
@@ -1070,7 +1070,7 @@ describe('test utils: testHmr', () => {
       yield init({
         'main.js': 'console.log("I am main.js")',
       })
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.inits).to.deep.equal({
         'main.js': 'console.log("I am main.js")',
       })
@@ -1081,7 +1081,7 @@ describe('test utils: testHmr', () => {
       yield init({
         'main.js': tpl,
       })
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.templates).to.deep.equal({
         'main.js': tpl,
       })
@@ -1093,7 +1093,7 @@ describe('test utils: testHmr', () => {
       yield init({
         'main.js': tpl,
       })
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.inits).to.deep.equal({
         'main.js': content,
       })
@@ -1105,21 +1105,21 @@ describe('test utils: testHmr', () => {
     hit('always includes string specs', function*() {
       yield spec({ always: 'ALWAYS' })
       yield init(0)
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.inits).to.deep.equal({ always: 'ALWAYS' })
     })
 
     hit('always includes * specs', function*() {
       yield spec({ always: { '*': 'ALWAYS' } })
       yield init(0)
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.inits).to.deep.equal({ always: 'ALWAYS' })
     })
 
     hit('conditionnaly includes labeled specs', function*() {
       yield spec({ foo: { 0: 'FOO' }, bar: { 1: 'BAR' } })
       yield init(1)
-      const state = yield debug()
+      const state = yield $$debug()
       expect(state.inits).to.deep.equal({ bar: 'BAR' })
     })
   })
@@ -1197,12 +1197,12 @@ describe('test utils: testHmr', () => {
 
     hit('triggers init', function*() {
       {
-        const { started } = yield debug()
+        const { started } = yield $$debug()
         expect(started).to.be.false
       }
       yield page()
       {
-        const { started } = yield debug()
+        const { started } = yield $$debug()
         expect(started).to.be.true
       }
     })
@@ -1236,12 +1236,12 @@ describe('test utils: testHmr', () => {
 
     hit('triggers init', function*() {
       {
-        const { started } = yield debug()
+        const { started } = yield $$debug()
         expect(started).to.be.false
       }
       yield page.$eval()
       {
-        const { started } = yield debug()
+        const { started } = yield $$debug()
         expect(started).to.be.true
       }
     })

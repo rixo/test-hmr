@@ -116,7 +116,7 @@ const change = changes => ({
 
 change.rm = Symbol('change: rm')
 
-const debug = () => ({ type: DEBUG })
+const $$debug = () => ({ type: DEBUG })
 
 module.exports = {
   INIT,
@@ -133,7 +133,7 @@ module.exports = {
   DEBUG,
 
   commands: {
-    debug,
+    $$debug,
     spec,
     templates,
     change,
