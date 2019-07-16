@@ -136,6 +136,7 @@ describe('test utils: testHmr', () => {
         let options = {
           it: _it,
           describe: _describe,
+          actualDescribe: _describe,
           describeSkip,
           before: _before,
           reset,

@@ -606,7 +606,7 @@ const runAsDescribeTag = (config, strings, values) => {
       }
 
       let stepEntries
-      config.describe(desc, () => {
+      config.actualDescribe(desc, () => {
         stepEntries = steps.map((step, i) => {
           const deferred = Deferred()
           const promise = deferred.promise.catch(err => {
@@ -664,6 +664,7 @@ const runAsItTag = (config, strings, values) => {
 const configDefaults = {
   it,
   describe,
+  actualDescribe: describe,
   describeSkip: it.skip, // use `it` because skipped describe are not reported
   before,
   loadPage,
