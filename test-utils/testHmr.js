@@ -537,6 +537,17 @@ const runHandler = async (config, handler) => {
   }
 }
 
+const stepTitle = (step, i) => {
+  const title = `step ${i}`
+  const types = ['html', 'sub', 'function']
+  for (const type of types) {
+    if (step[type] != null) {
+      return `${title} (${type})`
+    }
+  }
+  return title
+}
+
 const runAsDescribeTag = (config, strings, values) => {
   const { source, functions } = interpolateFunctions(strings, values)
   const { title } = parseTitleOnly(source)
@@ -595,8 +606,7 @@ const runAsDescribeTag = (config, strings, values) => {
             const promise = deferred.promise.catch(err => {
               deferred.error = err
             })
-            const title = step.title || `step ${i}`
-            config.it(title, function() {
+            config.it(stepTitle(step, i), function() {
               if (abort) {
                 this.skip()
               } else {

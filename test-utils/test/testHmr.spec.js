@@ -1430,9 +1430,9 @@ describe('test utils: testHmr', () => {
           .and.calledWith('after update 0 (initial initialisation)')
         expect(_it, 'it')
           .to.have.been.calledThrice //
-          .and.calledWith('step 0')
-          .and.calledWith('step 1')
-          .and.calledWith('step 2')
+          .and.calledWith('step 0 (html)')
+          .and.calledWith('step 1 (sub)')
+          .and.calledWith('step 2 (html)')
         expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
       })
     })
