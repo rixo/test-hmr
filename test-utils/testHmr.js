@@ -559,7 +559,6 @@ const runAsDescribeTag = (config, strings, values) => {
     err.name = 'SpecParseError'
     throw err
   }
-
   // guard: no expectations => skip
   if (!ast.expects || !ast.expects.length) {
     config.describeSkip(title)
