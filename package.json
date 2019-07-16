@@ -41,7 +41,6 @@
   },
   "devDependencies": {
     "@rixo/eslint-config": "^0.7.0-alpha.7",
-    "dedent": "^0.7.0",
     "pegjs": "^0.10.0"
   }
 }
