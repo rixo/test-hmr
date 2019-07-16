@@ -78,7 +78,7 @@ MultiLineConditionBody
   = label:MultiLineConditionLabel
     content:MultiLineConditionContent
     EndOfMultiLineCondition
-    { return { condition: label, text: content.text, content, block: true, ...pos() } }
+    { return { ...label, text: content.text, content, block: true, ...pos() } }
 
 EndOfMultilineCommand
   = _ "::" ":"* _
@@ -87,7 +87,10 @@ EndOfMultilineBlock
   = _ "::" ":"* _
 
 MultiLineConditionLabel
-  = "::" _ label:$(!EndOfMultilineCommand (!EOL .))+ EndOfMultilineCommand (!EOL .)* EOL { return label }
+  = "::" _ label:$(!EndOfMultilineCommand (!EOL .))+
+    EndOfMultilineCommand title:$(!EOL .)*
+    EOL
+    { return { condition: label, title } }
 
 MultiLineConditionContent
   = $ (!EndOfMultiLineCondition Line)* { return { text: text(), ...pos() } }

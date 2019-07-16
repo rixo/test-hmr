@@ -727,7 +727,7 @@ describe('hmr spec parser.parse', () => {
         ---- file1 ----
         ::0:: comments are allowed here
           cond0
-        ::1:: comments are just ignored (for now?)
+        ::1::
           cond1
           line after
       `,
@@ -739,10 +739,12 @@ describe('hmr spec parser.parse', () => {
               parts: [
                 {
                   condition: '0',
+                  title: 'comments are allowed here',
                   text: _`cond0`,
                 },
                 {
                   condition: '1',
+                  title: '',
                   text: __('cond1', 'line after'),
                 },
               ],
