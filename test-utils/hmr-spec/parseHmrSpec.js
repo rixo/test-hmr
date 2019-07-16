@@ -202,10 +202,12 @@ const compileSteps = (functions, { parts, conditions }) => {
     if (lines.length > 0) {
       const hasHtmlStep = steps.some(({ text }) => text != null)
       if (!hasHtmlStep) {
-        throw new Error(
-          `Condition "${condition}" has some HTML expectations, but no HTML` +
-            ' step: HTML expecations would be ignored'
+        const error = new Error(
+          `Expected condition "${condition}" has some HTML parts, but ` +
+            'no HTML step (HTML expecations would not be asserted!)'
         )
+        error.name = 'ParseError'
+        throw error
       }
     }
     const before = lines.slice(0, stepsIndex)
