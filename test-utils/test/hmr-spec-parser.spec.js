@@ -725,9 +725,9 @@ describe('hmr spec parser.parse', () => {
     testParse(
       `
         ---- file1 ----
-        ::0::
+        ::0:: comments are allowed here
           cond0
-        ::1::
+        ::1:: comments are just ignored (for now?)
           cond1
           line after
       `,

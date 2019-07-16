@@ -83,14 +83,17 @@ MultiLineConditionBody
 EndOfMultilineCommand
   = _ "::" ":"* _
 
+EndOfMultilineBlock
+  = _ "::" ":"* _
+
 MultiLineConditionLabel
-  = "::" _ label:$(!EndOfMultilineCommand .)+ EndOfMultilineCommand EOL { return label }
+  = "::" _ label:$(!EndOfMultilineCommand (!EOL .))+ EndOfMultilineCommand (!EOL .)* EOL { return label }
 
 MultiLineConditionContent
   = $ (!EndOfMultiLineCondition Line)* { return { text: text(), ...pos() } }
 
 EndOfMultiLineCondition
-  = (& Condition / EndOfMultilineCommand EOL? / EOF)
+  = (& FileCommand / EndOfMultilineBlock EOL? / EOF)
 
 ConditionContent
   //= text:ConditionContentBlock "\n"? { return { text, ...pos() } }
