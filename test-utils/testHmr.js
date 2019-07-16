@@ -282,11 +282,34 @@ const processSpec = (state, { specs, functions }) => {
   return setSpec(state, ast)
 }
 
-const processPageProxy = (state, { method, args }) => {
-  if (method) {
-    return state.page[method](...args)
+const resolvePath = (obj, path) => {
+  let parent
+  let target = obj
+  if (path) {
+    for (const step of path) {
+      parent = target
+      target = parent[step]
+    }
+  }
+  return { target, parent }
+}
+
+const processPageProxy = (state, { path, args }) => {
+  const { target, parent } = resolvePath(state.page, path)
+  if (args) {
+    if (typeof target === 'function') {
+      return target.apply(parent, args)
+    } else {
+      if (args.length > 0) {
+        throw new Error(
+          `page.${path.join('.')} is not a function: the proxy call must ` +
+            'have exactly 0 arguments to retrieve the object instance'
+        )
+      }
+      return target
+    }
   } else {
-    return state.page
+    return target
   }
 }
 
@@ -500,7 +523,7 @@ testHmr.only = createTestHmr({ it: it.only })
 
 // === Export ===
 
-module.exports = {
+module.exports = Object.assign(testHmr, {
   testHmr,
   ...commands,
-}
+})

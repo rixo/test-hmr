@@ -89,20 +89,39 @@ spec.$$discard = () => ({
   type: DISCARD_EXPECTS,
 })
 
-const pageProxy = new Proxy(
-  () => ({
-    type: PAGE,
-  }),
-  {
-    get(target, prop) {
-      return (...args) => ({
-        type: PAGE,
-        method: prop,
-        args,
-      })
-    },
-  }
-)
+// Allows to retrieve objects, and proxies method calls to the page instance.
+//
+//     // retrieve references to objects
+//     const page = yield page()
+//     const keyboard = yield page.keybard()
+//
+//     // proxy method calls (also, await on returned promises)
+//     yield page.click('button')
+//     yield page.keyboard.press('Esc')
+//
+const PageProxy = (path = []) => {
+  // reuse already created proxy objects
+  const cache = {}
+  return new Proxy(
+    (...args) => ({
+      type: PAGE,
+      path,
+      args,
+    }),
+    {
+      get(target, prop) {
+        if (cache[prop]) {
+          return cache[prop]
+        }
+        const proxy = PageProxy([...path, prop])
+        cache[prop] = proxy
+        return proxy
+      },
+    }
+  )
+}
+
+const pageProxy = PageProxy()
 
 const innerText = selector => ({
   type: INNER_TEXT,

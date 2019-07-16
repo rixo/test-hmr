@@ -32,6 +32,9 @@ describe('test utils: testHmr', () => {
     writeHmr = sinon.fake(async () => {})
     _page = {
       $eval: sinon.fake(),
+      keyboard: {
+        press: sinon.fake(),
+      },
     }
     loadPage = sinon.fake(async (url, callback) => callback(_page))
     const result = {
@@ -71,6 +74,8 @@ describe('test utils: testHmr', () => {
         const testHmr = createTestHmr(options)
         if (executer) {
           return executer(testHmr)
+        } else if (typeof title === 'function') {
+          return testHmr(null, title)
         } else {
           return testHmr(title, handler)
         }
@@ -1245,7 +1250,38 @@ describe('test utils: testHmr', () => {
         expect(started).to.be.true
       }
     })
-  })
+
+    describe('yield page.keyboard()', () => {
+      hit('returns the object instance', function*() {
+        const keyboard = yield page.keyboard()
+        expect(keyboard).to.equal(_page.keyboard)
+      })
+
+      it('crashes when calling an object instance with arguments', async () => {
+        _page.keyboard = {}
+        let error
+        try {
+          await _testHmr(function*() {
+            yield page.keyboard('boom')
+          })
+        } catch (err) {
+          error = err
+        }
+        expect(error).to.exist
+        expect(error.message).to.match(/\bnot a function\b/)
+      })
+    })
+
+    describe('yield page.keyboard[method](...args)', () => {
+      hit(
+        'proxies the method to the actual page.keyboard instance',
+        function*() {
+          yield page.keyboard.press('Backspace')
+          expect(_page.keyboard.press).to.have.been.calledOnceWith('Backspace')
+        }
+      )
+    })
+  }) // yield page
 
   describe('testHmr`...`', () => {
     const runTest = wrapper => _testHmr('*under test*', null, null, wrapper)
