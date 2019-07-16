@@ -21,9 +21,9 @@ const normalizeHtml = html => {
     allowedTags: false,
     allowedAttributes: false,
     // selfClosing: false,
-    allowedSchemes: false,
-    allowedSchemesByTag: false,
-    allowedSchemesAppliedToAttributes: false,
+    // allowedSchemes: false,
+    // allowedSchemesByTag: false,
+    // allowedSchemesAppliedToAttributes: false,
   })
   result = result.replace(trimRegex, '$1$3')
   result = result.replace(dedupSpaceRegex, ' ')
