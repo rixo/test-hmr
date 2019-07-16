@@ -1,3 +1,7 @@
+const {
+  env: { DETAIL, E2E, RC_HTTP },
+} = process
+
 module.exports = {
   // use HTTP endpoints to remote control webpack server -- main use case is
   // to test the HTTP client/server themselves
@@ -7,7 +11,7 @@ module.exports = {
   //   to move webpack to its own proccess (it was first needed with Cypress,
   //   that has been investigated as a possible solution).
   //
-  rcOverHttp: process.env.RC_HTTP != null,
+  rcOverHttp: RC_HTTP != null,
 
   // default: relaunch webpack dev server before each test
   //
@@ -21,11 +25,11 @@ module.exports = {
 
   // they're slow, so they're annoying during active dev... by default,
   // they're disabled when watching
-  selfIntegrationTests: process.env.E2E != 0,
+  selfIntegrationTests: E2E != 0,
 
   // 0, or 'skip' -- default: true
-  e2e: process.env.E2E,
+  e2e: E2E,
 
-  runSpecTagAsDescribe: true,
-  describeByStep: process.env.STEPS,
+  runSpecTagAsDescribe: DETAIL == null || DETAIL > 0,
+  describeByStep: DETAIL > 1,
 }
