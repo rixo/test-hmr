@@ -4,9 +4,9 @@
   "description": "Test suite for svelte HMR",
   "main": "index.js",
   "scripts": {
-    "test": "mocha test-utils/bootstrap.js test",
+    "test": "mocha test-utils/bootstrap.js 'test/**/*.spec.js'",
     "test:watch": "npm run test -- --watch",
-    "test:debug": "mocha debug test-utils/bootstrap.js test",
+    "test:debug": "mocha debug test-utils/bootstrap.js 'test/**/*.spec.js'",
     "test:self": "mocha test-utils/bootstrap.js test-utils/test",
     "test:self:watch": "E2E=0 npm run test:self -- --watch",
     "test:self:debug": "mocha debug test-utils/bootstrap.js test-utils/test",
