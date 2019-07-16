@@ -178,7 +178,7 @@ const assertExpect = async (state, expectation, cond) => {
           stepName = `step ${index} (sub)`
           await consumeSub(sub, state.processEffect)
         }
-        if (html) {
+        if (html != null) {
           stepName = `step ${index} (html)`
           const { page } = state
           const APP_ROOT_SELECTOR = '#app'

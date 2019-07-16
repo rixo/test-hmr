@@ -40,7 +40,7 @@ describe('test utils: testHmr', () => {
         press: sinon.fake(),
       },
     }
-    _page.$eval.return = results => {
+    _page.$eval.return = (...results) => {
       _page.$eval.results = results
     }
     loadPage = sinon.fake(async (url, callback) => callback(_page))
@@ -63,7 +63,7 @@ describe('test utils: testHmr', () => {
         }
 
         _it = sinon.fake((desc, handler) => {
-          const { resolve, reject } = startIt()
+          const { resolve } = startIt()
           let skipped = false
           const scope = {
             slow: noop,
@@ -80,7 +80,13 @@ describe('test utils: testHmr', () => {
                   it: desc,
                 })
               })
-              .catch(reject)
+              .catch(err => {
+                resolve({
+                  result: err,
+                  error: err,
+                  it: desc,
+                })
+              })
           } else {
             resolve({
               skipped: true,
@@ -672,6 +678,41 @@ describe('test utils: testHmr', () => {
       })
     }) // expectation subs
 
+    hit('parses empty condition lines in files', function*() {
+      yield spec`
+        ---- file.js ----
+        ::0
+      `
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        specs: {
+          'file.js': {
+            '*': _``,
+            0: _``,
+          },
+        },
+      })
+    })
+
+    hit('parses empty condition lines in expects', function*() {
+      yield spec`
+        ---- file.js ----
+
+        ****
+        ::0
+      `
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        specs: {
+          'file.js': {
+            '*': _``,
+          },
+        },
+        expects: new Map([['0', { steps: [{ html: _`` }] }]]),
+      })
+      yield spec.$$discard()
+    })
+
     // kitchen sink
     hit('lets mix all styles for maximum expressivity', function*() {
       yield spec(`
@@ -1023,6 +1064,18 @@ describe('test utils: testHmr', () => {
       })
       expect(fakeSub, 'sub').to.have.been.called
     })
+
+    it('runs empty html expects', async () => {
+      _page.$eval.return('')
+      await _testHmr('runs empty html expects', function*() {
+        yield spec.expect(0, '')
+        const state = yield $$debug()
+        expect(state).to.matchPattern({
+          expects: new Map([['0', { steps: [{ html: _`` }] }]]),
+        })
+      })
+      expect(_page.$eval).to.have.been.calledOnce
+    })
   })
 
   describe('yield spec.expect(int, string)', () => {
@@ -1327,14 +1380,9 @@ describe('test utils: testHmr', () => {
 
       it('crashes when calling an object instance with arguments', async () => {
         _page.keyboard = {}
-        let error
-        try {
-          await _testHmr(function*() {
-            yield page.keyboard('boom')
-          })
-        } catch (err) {
-          error = err
-        }
+        const { error } = await _testHmr(function*() {
+          yield page.keyboard('boom')
+        })
         expect(error).to.exist
         expect(error.message).to.match(/\bnot a function\b/)
       })
@@ -1391,7 +1439,7 @@ describe('test utils: testHmr', () => {
       })
 
       it('runs conditions with `describe`', async () => {
-        _page.$eval.return(['<h1>I am file</h1>', '<h1>I am still</h1>'])
+        _page.$eval.return('<h1>I am file</h1>', '<h1>I am still</h1>')
         await runTest(
           testHmr => testHmr`
             # my spec
@@ -1411,7 +1459,7 @@ describe('test utils: testHmr', () => {
       })
 
       it('runs steps with `it`', async () => {
-        _page.$eval.return(['<h1>I am file</h1>', '<h2>I am still</h2>'])
+        _page.$eval.return('<h1>I am file</h1>', '<h2>I am still</h2>')
         await runTest(
           testHmr => testHmr`
             # my spec
@@ -1456,7 +1504,7 @@ describe('test utils: testHmr', () => {
       })
 
       it('runs conditions with `it`', async () => {
-        _page.$eval.return(['<h1>I am file</h1>', '<h1>I am still</h1>'])
+        _page.$eval.return('<h1>I am file</h1>', '<h1>I am still</h1>')
         await runTest(
           testHmr => testHmr`
             # my spec
