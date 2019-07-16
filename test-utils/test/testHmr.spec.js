@@ -20,6 +20,7 @@ const _ = strings =>
 
 describe('test utils: testHmr', () => {
   let _it
+  let _describe
   let reset
   let writeHmr
   let _page
@@ -28,42 +29,109 @@ describe('test utils: testHmr', () => {
 
   beforeEach(() => {
     _it = null
+    _describe = null
     reset = sinon.fake()
     writeHmr = sinon.fake(async () => {})
     _page = {
-      $eval: sinon.fake(),
+      $eval: sinon.fake(() => {
+        return _page.$eval.results && _page.$eval.results.shift()
+      }),
       keyboard: {
         press: sinon.fake(),
       },
     }
+    _page.$eval.return = results => {
+      _page.$eval.results = results
+    }
     loadPage = sinon.fake(async (url, callback) => callback(_page))
-    const result = {
-      skipped: false,
-    }
-    const skip = () => {
-      result.skipped = true
-    }
     _testHmr = (title, handler, customizer, executer) =>
       new Promise((resolve, reject) => {
-        _it = sinon.fake(function(desc, handler) {
-          const scope = { slow: noop, skip }
+        let rootPromises
+
+        const startIt = () => {
+          if (rootPromises) {
+            const deferred = {}
+            const promise = new Promise((resolve, reject) => {
+              deferred.resolve = resolve
+              deferred.reject = reject
+            })
+            rootPromises.push(promise)
+            return deferred
+          } else {
+            return { resolve, reject }
+          }
+        }
+
+        _it = sinon.fake((desc, handler) => {
+          const { resolve, reject } = startIt()
+          let skipped = false
+          const scope = {
+            slow: noop,
+            skip: () => {
+              skipped = true
+            },
+          }
           if (handler) {
-            return handler
-              .call(scope)
+            return Promise.resolve(handler.call(scope))
               .then(value => {
                 resolve({
-                  ...result,
+                  skipped,
                   result: value,
+                  it: desc,
                 })
               })
               .catch(reject)
           } else {
-            result.skipped = true
-            resolve(result)
+            resolve({
+              skipped: true,
+              it: desc,
+            })
           }
         })
+
+        _describe = sinon.fake((desc, handler) => {
+          let promises
+          if (!rootPromises) {
+            // claim root
+            promises = []
+            rootPromises = promises
+          }
+          const scope = {
+            slow: noop,
+            skip: () => {
+              throw new Error('TODO')
+            },
+          }
+          if (handler) {
+            handler.call(scope)
+          }
+          if (promises) {
+            Promise.all(promises)
+              .then(results => {
+                resolve({
+                  result: results,
+                  describe: desc,
+                  skipped: !handler,
+                })
+              })
+              .catch(reject)
+          }
+        })
+
+        const describeSkip = title => _describe(title)
+
+        const _before = handler =>
+          new Promise((resolve, reject) => {
+            setImmediate(() => {
+              Promise.resolve(handler()).then(resolve, reject)
+            })
+          })
+
         let options = {
           it: _it,
+          describe: _describe,
+          describeSkip,
+          before: _before,
           reset,
           writeHmr,
           loadPage,
@@ -1286,13 +1354,83 @@ describe('test utils: testHmr', () => {
   describe('testHmr`...`', () => {
     const runTest = wrapper => _testHmr('*under test*', null, null, wrapper)
 
-    it('can be used as a template literal', async () => {
-      await runTest(
-        testHmr => testHmr`
-          # my spec
-        `
-      )
-      expect(_it).to.have.been.calledOnce
+    describe('run as mocha single `it`', () => {
+      const customizer = options => ({
+        ...options,
+        runTagAsDescribe: false,
+      })
+      const runTest = wrapper =>
+        _testHmr('*under test*', null, customizer, wrapper)
+
+      it('can be used as a template literal', async () => {
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+          `
+        )
+        expect(_it).to.have.been.calledOnce
+      })
+    })
+
+    describe('run as mocha `describe`', () => {
+      const customizer = options => ({
+        ...options,
+        runTagAsDescribe: true,
+      })
+      const runTest = wrapper =>
+        _testHmr('*under test*', null, customizer, wrapper)
+
+      it('can be used as a template literal', async () => {
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+          `
+        )
+        expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
+      })
+
+      it('runs conditions with `describe`', async () => {
+        _page.$eval.return(['<h1>I am file</h1>', '<h1>I am still</h1>'])
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+            ---- my-file ----
+            <h1>I am file</h1>
+            ****
+            ::0 <h1>I am file</h1>
+            ::1 <h1>I am still</h1>
+          `
+        )
+        expect(_describe, 'describe')
+          .to.have.been.calledWith('my spec')
+          .and.calledWith('after update 0')
+          .and.calledWith('after update 1')
+        expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+      })
+
+      it('runs steps with `it`', async () => {
+        _page.$eval.return(['<h1>I am file</h1>', '<h2>I am still</h2>'])
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+            ---- my-file ----
+            <h1>I am file</h1>
+            ****
+            ::0::
+              <h1>I am file</h1>
+              ${function*() {}}
+              <h2>I am still</h2>
+          `
+        )
+        expect(_describe, 'describe')
+          .to.have.been.calledTwice.and.calledWith('my spec')
+          .and.calledWith('after update 0')
+        expect(_it, 'it')
+          .to.have.been.calledThrice.and.calledWith('step 0')
+          .and.calledWith('step 1')
+          .and.calledWith('step 2')
+        expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+      })
     })
 
     it('marks tests with no assertions as skipped', async () => {
@@ -1327,6 +1465,21 @@ describe('test utils: testHmr', () => {
           ::0 <h1>I am file</h1>
         `
       )
+      expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
+    })
+
+    it('registers single conditions with `it`', async () => {
+      _page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
+      await runTest(
+        testHmr => testHmr`
+          # my spec
+          ---- my-file ----
+          <h1>I am file</h1>
+          ****
+          ::0 <h1>I am file</h1>
+        `
+      )
+      expect(_it, 'it').to.have.been.calledOnceWith('my spec')
       expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
     })
 

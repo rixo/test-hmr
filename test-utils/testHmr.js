@@ -7,6 +7,7 @@ const { writeHmr, loadPage } = require('.')
 const normalizeHtml = require('./normalizeHtml')
 const interpolateFunctions = require('./interpolateFunctions')
 const { parseInlineSpec, parseFullSpec, parseTitleOnly } = require('./hmr-spec')
+const { runSpecTagAsDescribe } = require('./config')
 
 const {
   CHANGE,
@@ -36,6 +37,15 @@ const isGenerator = (() => {
   return fn => fn instanceof GeneratorFunction
 })()
 
+const Deferred = () => {
+  const deferred = {}
+  deferred.promise = new Promise((resolve, reject) => {
+    deferred.resolve = resolve
+    deferred.reject = reject
+  })
+  return deferred
+}
+
 const consumeSub = (sub, callback) => consume(sub.call(commands), callback)
 
 const consume = async (gen, callback, firstValue) => {
@@ -48,11 +58,20 @@ const consume = async (gen, callback, firstValue) => {
     if (!value) continue
     try {
       nextValue = await callback(value)
+      if (nextValue instanceof consume.Return) {
+        return nextValue.value
+      }
     } catch (err) {
       gen.throw(err)
     }
   } while (!next.done)
 }
+
+consume.Return = function ConsumeReturn(value) {
+  this.value = value
+}
+
+consume.return = value => new consume.Return(value)
 
 const initChanges = (state, { inits }) => {
   // support for spec-change `init(0)`
@@ -105,41 +124,62 @@ const ensureFirstExpect = (state, label) => {
   }
 }
 
-const assertExpect = async (state, expectation) => {
+const passIt = (its, key, handler) => {
+  const promise = handler()
+  if (its) {
+    // NOTE mute the error, if we're running in a describe
+    return promise
+      .then(r => {
+        its[key].resolve(r)
+      })
+      .catch(err => {
+        its[key].reject(err)
+      })
+  }
+  return promise
+}
+
+const assertExpect = async (state, expectation, cond) => {
+  // its: test promises that we need to resolve (for tag spec as describe)
+  const { its: { [cond]: its } = {} } = state.config
   const { before, after, steps = [] } = expectation
   if (before) {
     await consumeSub(before, state.processEffect)
   }
+  let i = 0
   for (const step of steps) {
-    const {
-      function: fn,
-      html,
-      sub,
-      before: beforeStep,
-      after: afterStep,
-    } = step
-    if (beforeStep) {
-      await consumeSub(beforeStep, state.processEffect)
-    }
-    if (fn) {
-      await fn.call(commands)
-    }
-    if (sub) {
-      await consumeSub(sub, state.processEffect)
-    }
-    if (html) {
-      const { page } = state
-      const APP_ROOT_SELECTOR = '#app'
-      const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
-      const actual = normalizeHtml(contents)
-      expect(actual).to.equal(html)
-    }
-    if (afterStep) {
-      await consumeSub(afterStep, state.processEffect)
-    }
+    const index = i++
+    await passIt(its, index, async () => {
+      const {
+        function: fn,
+        html,
+        sub,
+        before: beforeStep,
+        after: afterStep,
+      } = step
+      if (beforeStep) {
+        await consumeSub(beforeStep, state.processEffect)
+      }
+      if (fn) {
+        await fn.call(commands)
+      }
+      if (sub) {
+        await consumeSub(sub, state.processEffect)
+      }
+      if (html) {
+        const { page } = state
+        const APP_ROOT_SELECTOR = '#app'
+        const contents = await page.$eval(APP_ROOT_SELECTOR, el => el.innerHTML)
+        const actual = normalizeHtml(contents)
+        expect(actual).to.equal(html)
+      }
+      if (afterStep) {
+        await consumeSub(afterStep, state.processEffect)
+      }
+    })
   }
   if (after) {
-    await consumeSub(after, state.processEffect)
+    consumeSub(after, state.processEffect)
   }
 }
 
@@ -162,13 +202,11 @@ const consumeExpects = async (state, _untilLabel, alreadyWritten = false) => {
     lastLabel = label
 
     if (!alreadyWritten) {
-      // const files = renderSpecs(state, changes)
-      // await writeHmr(state.page, files)
       const files = renderSpecs(state, label)
       await writeHmr(state.page, files)
     }
 
-    await assertExpect(state, expect)
+    await assertExpect(state, expect, label)
 
     if (label === untilLabel) {
       return label
@@ -466,27 +504,69 @@ const runHandler = async (config, handler) => {
   }
 }
 
-const configDefaults = {
-  it,
-  loadPage,
-  // TODO remove dep on global
-  reset: (...args) => app.reset(...args),
-  writeHmr,
-}
-
-const createTestHmr = (options = {}) => {
-  // config defaults
-  const config = {
-    ...configDefaults,
-    ...options,
-  }
-
-  const testHmr = (description, handler) =>
-    config.it(description, () => runHandler(config, handler))
-
-  const testHmrTag = (strings, values) => {
-    const { source, functions } = interpolateFunctions(strings, values)
-    const { title } = parseTitleOnly(source)
+const runAsDescribeTag = (config, strings, values) => {
+  const { source, functions } = interpolateFunctions(strings, values)
+  const { title } = parseTitleOnly(source)
+  try {
+    const ast = parseFullSpec(source, functions)
+    // guard: no expectations => skip
+    if (!ast.expects || !ast.expects.length) {
+      config.describeSkip(title)
+      return
+    }
+    // guard: only one update case => run as 'it'
+    if (ast.expects.length === 1 && ast.expects[0][1].steps.length === 1) {
+      return config.it(title, async function() {
+        return runHandler(config, function*() {
+          yield {
+            type: SET_SPEC,
+            ast,
+          }
+        })
+      })
+    }
+    // nominal: run as 'describe'
+    config.describe(title, function() {
+      let abort = false
+      const condEntries = ast.expects.map((expect, cond) => {
+        const steps = expect[1].steps
+        let stepEntries
+        config.describe(`after update ${cond}`, () => {
+          stepEntries = steps.map((step, i) => {
+            const deferred = Deferred()
+            const promise = deferred.promise.catch(err => {
+              deferred.error = err
+            })
+            config.it(`step ${i}`, function() {
+              if (abort) {
+                this.skip()
+              } else {
+                return promise.then(() => {
+                  const err = deferred.error
+                  if (err) {
+                    abort = true
+                    throw err
+                  }
+                })
+              }
+            })
+            return [i, deferred]
+          })
+        })
+        return [cond, Object.fromEntries(stepEntries)]
+      })
+      const its = Object.fromEntries(condEntries)
+      config.before(() => {
+        const cfg = { ...config, its }
+        return runHandler(cfg, function*() {
+          yield {
+            type: SET_SPEC,
+            ast,
+          }
+        })
+      })
+    })
+  } catch (err) {
     config.it(title, async function() {
       const ast = parseFullSpec(source, functions)
       if (!ast.expects) {
@@ -501,8 +581,53 @@ const createTestHmr = (options = {}) => {
       }
     })
   }
+}
 
-  return (...args) => {
+const runAsItTag = (config, strings, values) => {
+  const { source, functions } = interpolateFunctions(strings, values)
+  const { title } = parseTitleOnly(source)
+  config.it(title, async function() {
+    const ast = parseFullSpec(source, functions)
+    if (!ast.expects) {
+      this.skip()
+    } else {
+      return runHandler(config, function*() {
+        yield {
+          type: SET_SPEC,
+          ast,
+        }
+      })
+    }
+  })
+}
+
+const configDefaults = {
+  it,
+  describe,
+  describeSkip: describe.skip,
+  before,
+  loadPage,
+  // TODO remove dep on global
+  reset: (...args) => app.reset(...args),
+  writeHmr,
+  runTagAsDescribe: runSpecTagAsDescribe,
+}
+
+const createTestHmr = (options = {}) => {
+  // config defaults
+  const config = {
+    ...configDefaults,
+    ...options,
+  }
+
+  const testHmr = (description, handler) =>
+    config.it(description, () => runHandler(config, handler))
+
+  const runAsTag = config.runTagAsDescribe ? runAsDescribeTag : runAsItTag
+
+  const testHmrTag = (strings, values) => runAsTag(config, strings, values)
+
+  const runAsTestOrTag = (...args) => {
     const [arg1, ...values] = args
     if (Array.isArray(arg1)) {
       return testHmrTag(arg1, values)
@@ -510,6 +635,8 @@ const createTestHmr = (options = {}) => {
       return testHmr(...args)
     }
   }
+
+  return runAsTestOrTag
 }
 
 const testHmr = createTestHmr()
@@ -517,9 +644,9 @@ const testHmr = createTestHmr()
 // for testing of testHmr itself
 testHmr.create = createTestHmr
 
-testHmr.skip = createTestHmr({ it: it.skip })
+testHmr.skip = createTestHmr({ it: it.skip, describe: describe.skip })
 
-testHmr.only = createTestHmr({ it: it.only })
+testHmr.only = createTestHmr({ it: it.only, describe: describe.only })
 
 // === Export ===
 
