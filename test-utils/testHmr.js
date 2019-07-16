@@ -551,39 +551,68 @@ const stepTitle = (step, i) => {
 const runAsDescribeTag = (config, strings, values) => {
   const { source, functions } = interpolateFunctions(strings, values)
   const { title } = parseTitleOnly(source)
+  let ast
   try {
-    const ast = parseFullSpec(source, functions)
-    // guard: no expectations => skip
-    if (!ast.expects || !ast.expects.length) {
-      config.describeSkip(title)
-      return
-    }
-    // guard: only one update case => run as 'it'
-    if (ast.expects.length === 1 && ast.expects[0][1].steps.length === 1) {
-      return config.it(title, async function() {
-        return runHandler(config, function*() {
-          yield {
-            type: SET_SPEC,
-            ast,
+    ast = parseFullSpec(source, functions)
+  } catch (err) {
+    err.name = 'SpecParseError'
+    throw err
+  }
+
+  // guard: no expectations => skip
+  if (!ast.expects || !ast.expects.length) {
+    config.describeSkip(title)
+    return
+  }
+  // guard: only one update case => run as 'it'
+  if (ast.expects.length === 1 && ast.expects[0][1].steps.length === 1) {
+    return config.it(title, async function() {
+      return runHandler(config, function*() {
+        yield {
+          type: SET_SPEC,
+          ast,
+        }
+      })
+    })
+  }
+  // nominal: run as 'describe'
+  config.describe(title, function() {
+    let abort = false
+    const condEntries = ast.expects.map(([, expect], index) => {
+      const steps = expect.steps
+      const desc = `after update ${index}${
+        expect.title ? ` (${expect.title})` : ''
+      }`
+
+      if (!config.describeByStep) {
+        const deferred = Deferred()
+        const promise = deferred.promise.catch(err => {
+          deferred.error = err
+        })
+        config.it(desc, function() {
+          if (abort) {
+            this.skip()
+          } else {
+            return promise.then(() => {
+              const err = deferred.error
+              if (err) {
+                abort = true
+                throw err
+              }
+            })
           }
         })
-      })
-    }
-    // nominal: run as 'describe'
-    config.describe(title, function() {
-      let abort = false
-      const condEntries = ast.expects.map(([, expect], index) => {
-        const steps = expect.steps
-        const desc = `after update ${index}${
-          expect.title ? ` (${expect.title})` : ''
-        }`
+        return [index, deferred]
+      }
 
-        if (!config.describeByStep) {
+      let stepEntries
+      config.describe(desc, () => {
+        stepEntries = steps.map((step, i) => {
           const deferred = Deferred()
           const promise = deferred.promise.catch(err => {
             deferred.error = err
           })
-          config.it(desc, () => {
+          config.it(stepTitle(step, i), function() {
             if (abort) {
               this.skip()
             } else {
@@ -596,60 +625,22 @@ const runAsDescribeTag = (config, strings, values) => {
               })
             }
           })
-          return [index, deferred]
+          return [i, deferred]
+        })
+      })
+      return [index, Object.fromEntries(stepEntries)]
+    })
+    const its = Object.fromEntries(condEntries)
+    config.before(() => {
+      const cfg = { ...config, its }
+      return runHandler(cfg, function*() {
+        yield {
+          type: SET_SPEC,
+          ast,
         }
-
-        let stepEntries
-        config.describe(desc, () => {
-          stepEntries = steps.map((step, i) => {
-            const deferred = Deferred()
-            const promise = deferred.promise.catch(err => {
-              deferred.error = err
-            })
-            config.it(stepTitle(step, i), function() {
-              if (abort) {
-                this.skip()
-              } else {
-                return promise.then(() => {
-                  const err = deferred.error
-                  if (err) {
-                    abort = true
-                    throw err
-                  }
-                })
-              }
-            })
-            return [i, deferred]
-          })
-        })
-        return [index, Object.fromEntries(stepEntries)]
-      })
-      const its = Object.fromEntries(condEntries)
-      config.before(() => {
-        const cfg = { ...config, its }
-        return runHandler(cfg, function*() {
-          yield {
-            type: SET_SPEC,
-            ast,
-          }
-        })
       })
     })
-  } catch (err) {
-    config.it(title, async function() {
-      const ast = parseFullSpec(source, functions)
-      if (!ast.expects) {
-        this.skip()
-      } else {
-        return runHandler(config, function*() {
-          yield {
-            type: SET_SPEC,
-            ast,
-          }
-        })
-      }
-    })
-  }
+  })
 }
 
 const runAsItTag = (config, strings, values) => {
