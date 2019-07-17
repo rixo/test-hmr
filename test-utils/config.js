@@ -1,7 +1,7 @@
 const path = require('path')
 
 const {
-  env: { APP = 'app', DETAIL = 1, E2E = 0, RC_HTTP = 0 },
+  env: { APP = 'app', DETAIL = 1, E2E, RC_HTTP = 0 },
 } = process
 
 const isAbsolutePath = name => /^(?:\/|\w+:)/.test(name)
