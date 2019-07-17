@@ -1,17 +1,28 @@
+const path = require('path')
+
 const {
-  env: { DETAIL, E2E, RC_HTTP },
+  env: { APP = 'app', DETAIL = 1, E2E = 0, RC_HTTP = 0 },
 } = process
 
+const isAbsolutePath = name => /^(?:\/|\w+:)/.test(name)
+
+const resolveAppPath = name =>
+  isAbsolutePath(name) ? name : path.join(__dirname, '..', name)
+
+const appPath = resolveAppPath(APP)
+
 module.exports = {
+  appPath,
+
   // use HTTP endpoints to remote control webpack server -- main use case is
   // to test the HTTP client/server themselves
   //
   // NOTE HTTP RC is not needed for mocha + puppeteer because the webpack
   //   server runs in the same process, but it would be useful if we decide
   //   to move webpack to its own proccess (it was first needed with Cypress,
-  //   that has been investigated as a possible solution).
+  //   that was been investigated as a possible solution).
   //
-  rcOverHttp: RC_HTTP != null,
+  rcOverHttp: RC_HTTP != 0,
 
   // default: relaunch webpack dev server before each test
   //
@@ -33,3 +44,7 @@ module.exports = {
   runSpecTagAsDescribe: DETAIL == null || DETAIL > 0,
   describeByStep: DETAIL > 1,
 }
+
+// TODO log
+// eslint-disable-next-line no-console
+console.info(`[HMR Tests] Running app: ${appPath}`)
