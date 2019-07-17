@@ -9,11 +9,7 @@ const {
 } = require('../../test-utils')
 const config = require('../../test-utils/config')
 
-describe('test utils: sanity check', () => {
-  it('runs tests', () => {
-    expect(true).to.be.true
-  })
-
+describeE2e('test utils: sanity check', () => {
   it('can access puppeteer', async () => {
     const version = await browser.version()
     expect(version).not.to.be.undefined
@@ -28,7 +24,7 @@ describe('test utils: sanity check', () => {
     })
   }
 
-  describeE2e('remote control', () => {
+  describe('remote control', () => {
     beforeEach(reset)
 
     it(

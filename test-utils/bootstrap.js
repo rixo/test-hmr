@@ -126,6 +126,8 @@ const setupWebpack = fastResetStrategy ? setupFastWebpack : setupDefaultWebpack
 
 setGlobals({ expect, sinon, testHmr })
 initSelfTests()
-setupWebpack()
-setupPuppeteer()
+if (config.e2e != 0 && config.e2e !== 'skip') {
+  setupWebpack()
+  setupPuppeteer()
+}
 setupBailOut()
