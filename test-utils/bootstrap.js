@@ -107,9 +107,25 @@ const setupFastWebpack = () => {
   })
 }
 
+// this is useful to run a "debug pass": display debug info about a test,
+// and skip every test
+const setupBailOut = () => {
+  let bailed = false
+  before(function() {
+    if (bailed) {
+      this.skip()
+    }
+  })
+  const cancelRunningTests = () => {
+    bailed = true
+  }
+  setGlobals({ cancelRunningTests })
+}
+
 const setupWebpack = fastResetStrategy ? setupFastWebpack : setupDefaultWebpack
 
 setGlobals({ expect, sinon, testHmr })
 initSelfTests()
 setupWebpack()
 setupPuppeteer()
+setupBailOut()

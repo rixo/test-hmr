@@ -434,47 +434,6 @@ describe('test utils: testHmr', () => {
       })
     })
 
-    it.skip('runs partial file set writes', async () => {
-      let complete = false
-
-      await _testHmr('kitchen sink', function*() {
-        // _page.$eval.return()
-        yield spec(`
-          ---- foo ----
-          ::0 f00
-          ::1 f11
-          ---- bar ----
-          ::1 b00
-          ::2 b22
-        `)
-
-        yield change(0)
-        expect(writeHmr)
-          .to.have.callCount(1)
-          .and.calledWith(_page, {
-            foo: 'f00',
-          })
-
-        yield change(1)
-        expect(writeHmr)
-          .to.have.callCount(2)
-          .and.calledWith(_page, {
-            foo: 'f00',
-            bar: 'b00',
-          })
-
-        yield change(2)
-        expect(writeHmr).to.have.been.calledOnce
-
-        // .and.calledWith(_page, {
-        //   bar: 'b22',
-        // })
-        complete = true
-      })
-
-      expect(complete).to.be.true
-    })
-
     hit('parses expectations', function*() {
       yield spec(`
         ---- file ----
