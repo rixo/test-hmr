@@ -15,6 +15,7 @@ overrides:
       sinon: true
       describeE2e: true
       testHmr: true
+      cancelRunningTests: true
     rules:
       # chai assertions are often considred unused expressions
       no-unused-expressions: off
