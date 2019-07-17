@@ -96,9 +96,11 @@ describe('test utils: testHmr', () => {
                   return result
                 })
                 .catch(error => {
+                  // don't reject the it, actual mocha's `it` never
+                  // throws/rejects... but do reject the test, to
+                  // prevent silent failures/errors
                   const result = { error, skipped: false }
-                  // don't reject, actual mocha's `it` never throws/rejects
-                  resolve(result)
+                  reject(error)
                   return result
                 })
             } else {
@@ -188,8 +190,17 @@ describe('test utils: testHmr', () => {
   hit.skip = (title, handler) => makeHit(title, handler, null, it.skip)
   // custom
   // hit.browser: doesn't mock browser
-  hit.browser = (title, handler) =>
-    makeHit(title, handler, ({ it }) => ({ it }), it)
+  const makeBrowserHit = it => (title, handler) =>
+    makeHit(
+      title,
+      handler,
+      // eslint-disable-next-line no-unused-vars
+      ({ reset, writeHmr, loadPage, ...opts }) => opts,
+      it
+    )
+  hit.browser = makeBrowserHit(it)
+  hit.browser.only = makeBrowserHit(it.only)
+  hit.browser.skip = makeBrowserHit(it.skip)
 
   hit("wraps mocha's it", function*() {
     expect(_it).to.have.been.calledOnce
@@ -1435,12 +1446,10 @@ describe('test utils: testHmr', () => {
 
       it('crashes when calling an object instance with arguments', async () => {
         _page.keyboard = {}
-        const result = await _testHmr(function*() {
+        const result = _testHmr(function*() {
           yield page.keyboard('boom')
         })
-        expect(result.error)
-          .to.exist.and.have.property('message')
-          .that.include('not a function')
+        await expect(result).to.be.rejectedWith('not a function')
       })
     })
 
@@ -1456,7 +1465,11 @@ describe('test utils: testHmr', () => {
   }) // yield page
 
   describe('testHmr`...`', () => {
-    const runTest = wrapper => _testHmr('*under test*', null, null, wrapper)
+    const runTest = wrapper =>
+      _testHmr('*under test*', null, null, wrapper).catch(error => ({
+        error,
+        skipped: false,
+      }))
 
     describe('run as mocha single `it`', () => {
       const customizer = options => ({
@@ -1464,8 +1477,10 @@ describe('test utils: testHmr', () => {
         runTagAsDescribe: false,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper)
-
+        _testHmr('*under test*', null, customizer, wrapper).catch(error => ({
+          error,
+          skipped: false,
+        }))
       it('can be used as a template literal', async () => {
         await runTest(
           testHmr => testHmr`
@@ -1502,7 +1517,10 @@ describe('test utils: testHmr', () => {
         describeByStep: true,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper)
+        _testHmr('*under test*', null, customizer, wrapper).catch(error => ({
+          error,
+          skipped: false,
+        }))
 
       it('can be used as a template literal', async () => {
         await runTest(
@@ -1626,7 +1644,10 @@ describe('test utils: testHmr', () => {
         describeByStep: false,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper)
+        _testHmr('*under test*', null, customizer, wrapper).catch(error => ({
+          error,
+          skipped: false,
+        }))
 
       it('can be used as a template literal', async () => {
         await runTest(
@@ -1668,15 +1689,14 @@ describe('test utils: testHmr', () => {
     })
 
     it('throws on missing title', async () => {
-      let error
-      await runTest(
+      const result = await runTest(
         testHmr => testHmr`
           ---- just-a-file ----
         `
-      ).catch(err => {
-        error = err
-      })
-      expect(error).to.exist
+      )
+      expect(result)
+        .to.have.nested.property('error.message')
+        .that.include('Expected title')
     })
 
     it('runs simple assertions', async () => {
