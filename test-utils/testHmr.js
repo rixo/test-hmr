@@ -22,6 +22,7 @@ const {
   PAGE,
   SPEC,
   TEMPLATES,
+  WAIT,
   commands,
 } = require('./testHmr.commands')
 
@@ -460,6 +461,15 @@ const effectProcessor = state => {
 
       case PAGE:
         return processPageProxy(state, effect)
+
+      case WAIT: {
+        const { what } = effect
+        if (typeof what === 'number') {
+          return new Promise(resolve => setTimeout(resolve, what))
+        } else {
+          throw new Error('Unsupported wait operand: ' + what)
+        }
+      }
 
       case INNER_TEXT:
         return await state.page.$eval(effect.selector, el => el && el.innerText)

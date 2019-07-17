@@ -14,6 +14,7 @@ const CHANGE = 'changes'
 const PAGE = 'page'
 const INNER_TEXT = 'inner_text'
 const DEBUG = 'debug'
+const WAIT = 'wait'
 
 const init = inits => ({ type: INIT, inits })
 
@@ -137,6 +138,9 @@ change.rm = Symbol('change: rm')
 
 const $$debug = () => ({ type: DEBUG })
 
+// TODO test wait
+const wait = what => ({ type: wait, what })
+
 module.exports = {
   INIT,
   TEMPLATES,
@@ -150,6 +154,7 @@ module.exports = {
   PAGE,
   INNER_TEXT,
   DEBUG,
+  WAIT,
 
   commands: {
     $$debug,
@@ -159,5 +164,6 @@ module.exports = {
     init,
     page: pageProxy,
     innerText,
+    wait,
   },
 }
