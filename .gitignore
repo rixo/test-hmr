@@ -2,3 +2,4 @@ node_modules/
 *.orig
 cypress/videos/
 cypress/screenshots/
+/app.*
