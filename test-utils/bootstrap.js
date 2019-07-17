@@ -2,22 +2,24 @@ const chai = require('chai')
 const sinon = require('sinon')
 const puppeteer = require('puppeteer')
 
-const { startWebpack } = require('../app/test-server')
+const testServer = require('../lib/test-server')
 
-const { fastResetStrategy } = require('../test-utils/config')
-
-const config = require('./config')
 const testHmr = require('./testHmr')
+const config = require('./config')
+
+const { expect } = chai
+
+const { fastResetStrategy } = config
 
 const { DEBUG } = process.env
 
 const originalGlobals = {}
 
+const { startWebpack } = testServer(config.appPath)
+
 chai.use(require('sinon-chai'))
 chai.use(require('chai-as-promised'))
 chai.use(require('./chai-match-pattern'))
-
-const { expect } = chai
 
 const setGlobals = values => {
   Object.entries(values).forEach(([key, value]) => {
