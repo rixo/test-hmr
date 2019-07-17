@@ -24,6 +24,7 @@ describe('bindings', () => {
 
     <button on:click={onClick}>+</button>
 
+    ::0
     ::1 reloaded
 
     * * *

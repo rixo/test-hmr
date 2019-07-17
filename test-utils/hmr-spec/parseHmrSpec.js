@@ -38,6 +38,12 @@ const compileFileContent = ({ parts, conditions }) => {
     }
   }
 
+  // only add * for files with exactly zero condition cases
+  const hasCondition = Object.keys(result).length > 1
+  if (hasCondition) {
+    delete result['*']
+  }
+
   Object.keys(result).forEach(key => {
     result[key] = result[key].join('')
   })

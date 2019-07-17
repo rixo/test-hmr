@@ -1,6 +1,7 @@
 /* eslint-env mocha */
 
 const { expect } = require('chai')
+const { inspect } = require('util')
 const assert = require('assert')
 
 const { writeHmr, loadPage } = require('.')
@@ -719,6 +720,17 @@ testHmr.create = createTestHmr
 testHmr.skip = createTestHmr({ it: it.skip, describe: describe.skip })
 
 testHmr.only = createTestHmr({ it: it.only, describe: describe.only })
+
+testHmr.debug = (strings, ...values) => {
+  const { source, functions } = interpolateFunctions(strings, values)
+  const { title } = parseTitleOnly(source)
+  // eslint-disable-next-line no-console
+  console.debug('Debugging test', title)
+  const ast = parseFullSpec(source, functions)
+  // eslint-disable-next-line no-console
+  console.debug(inspect(ast, false, 10, true))
+  cancelRunningTests()
+}
 
 // === Export ===
 
