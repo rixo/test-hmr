@@ -54,9 +54,11 @@ describe('test utils: testHmr', () => {
           })
         })
     )
+
     _testHmr = (title, handler, customizer, executer) =>
       new Promise((resolve, reject) => {
         let rootPromises
+        let previousItPromise
 
         const startIt = () => {
           if (rootPromises) {
@@ -81,22 +83,37 @@ describe('test utils: testHmr', () => {
               skipped = true
             },
           }
-          if (handler) {
-            return Promise.resolve(handler.call(scope))
-              .then(value => {
-                resolve({
-                  skipped,
-                  result: value,
-                  it: desc,
+          const run = () => {
+            if (handler) {
+              return Promise.resolve(handler.call(scope))
+                .then(value => {
+                  const result = {
+                    skipped,
+                    result: value,
+                    it: desc,
+                  }
+                  resolve()
+                  return result
                 })
-              })
-              .catch(reject)
-          } else {
-            resolve({
-              skipped: true,
-              it: desc,
-            })
+                .catch(error => {
+                  const result = { error, skipped: false }
+                  // don't reject, actual mocha's `it` never throws/rejects
+                  resolve(result)
+                  return result
+                })
+            } else {
+              const result = {
+                skipped: true,
+                it: desc,
+              }
+              resolve(result)
+              return Promise.resolve(result)
+            }
           }
+          // previousItPromise: run tests in a series
+          const prev = previousItPromise
+          previousItPromise = Promise.resolve(prev).then(run)
+          return previousItPromise
         })
 
         _describe = sinon.fake((desc, handler) => {
@@ -433,7 +450,7 @@ describe('test utils: testHmr', () => {
 
         yield change(0)
         expect(writeHmr)
-          .to.have.been.callCount(1)
+          .to.have.callCount(1)
           .and.calledWith(_page, {
             foo: 'f00',
           })
@@ -1459,10 +1476,12 @@ describe('test utils: testHmr', () => {
 
       it('crashes when calling an object instance with arguments', async () => {
         _page.keyboard = {}
-        const result = _testHmr(function*() {
+        const result = await _testHmr(function*() {
           yield page.keyboard('boom')
         })
-        await expect(result).to.be.rejectedWith('not a function')
+        expect(result.error)
+          .to.exist.and.have.property('message')
+          .that.include('not a function')
       })
     })
 
@@ -1495,6 +1514,25 @@ describe('test utils: testHmr', () => {
           `
         )
         expect(_it).to.have.been.calledOnce
+      })
+
+      it('reports errors as test failure', async () => {
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+            --- myfile ---
+            ::0 nothing
+            * * *
+            ::0 something
+          `
+        )
+        expect(_it).to.have.been.calledOnce
+        // use `it` return value instead of runTest result, to ensure that
+        // the error really did pass through the test handler (as opposed to
+        // some kind of possible test artifact)
+        expect(await _it.returnValues[0])
+          .to.have.nested.property('error.message')
+          .that.include('expected')
       })
     })
 
@@ -1560,6 +1598,65 @@ describe('test utils: testHmr', () => {
           .and.calledWith('step 1 (sub)')
           .and.calledWith('step 2 (html)')
         expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+      })
+
+      it('marks failed `it` steps as failure and skip subsequent steps', async () => {
+        function* sub() {
+          throw new Error('oops')
+        }
+        _page.$eval = sinon.fake.returns('I am file')
+        await runTest(
+          testHmr => testHmr`
+          # my spec
+          ---- my-file ----
+          ::0 I am file
+          ****
+          ::0:: init
+            I am file
+          ::1:: crashes
+            I am file
+            ${sub}
+            I am file... not!
+          ::2:: skipped
+            Skipped
+            ${sub}
+        `
+        )
+        expect(_describe.args, 'describe args').to.matchPattern([
+          ['my spec', {}],
+          ['after update 0 (init)', {}],
+          ['after update 1 (crashes)', {}],
+          ['after update 2 (skipped)', {}],
+        ])
+        expect(_it.args, 'it args').to.matchPattern([
+          ['step 0 (html)', {}],
+          ['step 0 (html)', {}],
+          ['step 1 (sub)', {}],
+          ['step 2 (html)', {}],
+          ['step 0 (html)', {}],
+          ['step 1 (sub)', {}],
+        ])
+        // use `it` return value instead of runTest result, to ensure that
+        // the error really did pass through the test handler (as opposed to
+        // some kind of possible test artifact)
+        const results = await Promise.all(_it.returnValues)
+        expect(results, 'it return values').to.matchPattern([
+          // 0-0 (html)
+          { error: undefined, skipped: false },
+          // 1-0 (html)
+          { error: undefined, skipped: false },
+          // 1-1 (sub) <== error
+          {
+            error: { message: 'oops' },
+            skipped: false,
+          },
+          // 1-2 (html)
+          { error: undefined, skipped: true },
+          // 2-0 (html)
+          { error: undefined, skipped: true },
+          // 2-1 (sub)
+          { error: undefined, skipped: true },
+        ])
       })
     })
 
@@ -1681,6 +1778,54 @@ describe('test utils: testHmr', () => {
       expect(error, 'error').to.be.undefined
       expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
       expect(sub, 'sub').to.have.been.calledOnce
+    })
+
+    it('marks failed `it` cases as failure and skip subsequent cases', async () => {
+      function* sub() {
+        throw new Error('oops')
+      }
+      _page.$eval = sinon.fake.returns('I am file')
+      await runTest(
+        testHmr => testHmr`
+          # my spec
+          ---- my-file ----
+          ::0 I am file
+          ****
+          ::0:: init
+            I am file
+          ::1:: crashes
+            I am file... not!
+            ${sub}
+          ::2:: skipped
+            Skipped
+        `
+      )
+      expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
+      expect(_it, 'it')
+        .to.have.been.calledThrice //
+        .and.calledWith('after update 0 (init)')
+        .and.calledWith('after update 1 (crashes)')
+        .and.calledWith('after update 2 (skipped)')
+      // use `it` return value instead of runTest result, to ensure that
+      // the error really did pass through the test handler (as opposed to
+      // some kind of possible test artifact)
+      const results = await Promise.all(_it.returnValues)
+      // console.log(results)
+      expect(results, 'it return values').to.matchPattern([
+        {
+          error: undefined,
+          skipped: false,
+        },
+        {
+          error: {
+            message: /\bexpected\b/,
+          },
+        },
+        {
+          error: undefined,
+          skipped: true,
+        },
+      ])
     })
   })
 })

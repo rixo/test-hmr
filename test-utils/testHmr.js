@@ -188,7 +188,7 @@ const assertExpect = async (state, expectation, cond) => {
             APP_ROOT_SELECTOR,
             el => el.innerHTML
           )
-          const actual = normalizeHtml(contents)
+          const actual = contents ? normalizeHtml(contents) : ''
           expect(actual).to.equal(html)
         }
         if (afterStep) {
@@ -588,7 +588,9 @@ const runAsDescribeTag = (config, strings, values) => {
   }
   // nominal: run as 'describe'
   config.describe(title, function() {
+    let globalError = null
     let abort = false
+
     const condEntries = ast.expects.map(([, expect], index) => {
       const steps = expect.steps
       const desc = `after update ${index}${
@@ -601,16 +603,25 @@ const runAsDescribeTag = (config, strings, values) => {
           deferred.error = err
         })
         config.it(desc, function() {
-          if (abort) {
+          if (globalError) {
+            const error = globalError
+            globalError = null
+            abort = true
+            throw error
+          } else if (abort) {
             this.skip()
           } else {
-            return promise.then(() => {
-              const err = deferred.error
-              if (err) {
+            return promise
+              .then(() => {
+                const err = deferred.error
+                if (err) {
+                  throw err
+                }
+              })
+              .catch(err => {
                 abort = true
                 throw err
-              }
-            })
+              })
           }
         })
         return [index, deferred]
@@ -642,14 +653,19 @@ const runAsDescribeTag = (config, strings, values) => {
       return [index, Object.fromEntries(stepEntries)]
     })
     const its = Object.fromEntries(condEntries)
-    config.before(() => {
+
+    config.before(async () => {
       const cfg = { ...config, its }
-      return runHandler(cfg, function*() {
-        yield {
-          type: SET_SPEC,
-          ast,
-        }
-      })
+      try {
+        await runHandler(cfg, function*() {
+          yield {
+            type: SET_SPEC,
+            ast,
+          }
+        })
+      } catch (err) {
+        globalError = err
+      }
     })
   })
 }
