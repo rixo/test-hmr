@@ -43,7 +43,17 @@ describe('test utils: testHmr', () => {
     _page.$eval.return = (...results) => {
       _page.$eval.results = results
     }
-    loadPage = sinon.fake(async (url, callback) => callback(_page))
+    loadPage = sinon.fake(
+      (url, callback) =>
+        new Promise((resolve, reject) => {
+          // dezalgo
+          setImmediate(() => {
+            Promise.resolve(callback(_page))
+              .then(resolve)
+              .catch(reject)
+          })
+        })
+    )
     _testHmr = (title, handler, customizer, executer) =>
       new Promise((resolve, reject) => {
         let rootPromises
@@ -80,13 +90,7 @@ describe('test utils: testHmr', () => {
                   it: desc,
                 })
               })
-              .catch(err => {
-                resolve({
-                  result: err,
-                  error: err,
-                  it: desc,
-                })
-              })
+              .catch(reject)
           } else {
             resolve({
               skipped: true,
@@ -1190,7 +1194,7 @@ describe('test utils: testHmr', () => {
       yield spec.expect(1, `<h1>I am Kild</h1>`)
       yield spec.expect(2, `<h1>I am Kild</h1> <p>oooO   oOoo</p>`)
     })
-  })
+  }) // yield spec.expect(int, string)
 
   describe('yield init({...})', () => {
     hit('configures initial files', function*() {
@@ -1297,17 +1301,20 @@ describe('test utils: testHmr', () => {
       expect(writeHmr).to.have.been.calledWith(_page, { always: 'ALWAYS' })
     })
 
-    hit('conditionnaly includes labeled specs', function*() {
-      yield spec({ foo: { 0: 'FOO' }, bar: { 1: 'BAR' } })
+    hit('only write files that have a matching condition label', function*() {
+      yield spec({ foo: { 0: 'FOO', 1: 'foo' }, bar: { 1: 'BAR', 2: 'bar' } })
       yield change(0)
       expect(writeHmr).to.have.been.calledWith(_page, {
         foo: 'FOO',
-        bar: change.rm,
       })
       yield change(1)
       expect(writeHmr).to.have.been.calledWith(_page, {
-        foo: change.rm,
+        foo: 'foo',
         bar: 'BAR',
+      })
+      yield change(2)
+      expect(writeHmr).to.have.been.calledWith(_page, {
+        bar: 'bar',
       })
     })
   })
@@ -1381,11 +1388,10 @@ describe('test utils: testHmr', () => {
 
       it('crashes when calling an object instance with arguments', async () => {
         _page.keyboard = {}
-        const { error } = await _testHmr(function*() {
+        const result = _testHmr(function*() {
           yield page.keyboard('boom')
         })
-        expect(error).to.exist
-        expect(error.message).to.match(/\bnot a function\b/)
+        await expect(result).to.be.rejectedWith('not a function')
       })
     })
 

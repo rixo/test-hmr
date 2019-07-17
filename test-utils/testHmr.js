@@ -106,11 +106,11 @@ const renderChanges = (state, changes) => {
   )
 }
 
-const renderSpecs = ({ specs }, spec, rm = commands.change.rm) =>
+const renderSpecs = ({ specs }, spec) =>
   Object.fromEntries(
     Object.entries(specs)
       .map(([path, fileSpec]) => {
-        const content = fileSpec[spec] || fileSpec['*'] || rm
+        const content = fileSpec[spec] || fileSpec['*']
         return [path, content]
       })
       .filter(([, step]) => !!step)
@@ -264,7 +264,7 @@ const renderInitFiles = (state, changes) => {
     } else {
       state.initSpecLabel = String(changes)
     }
-    return renderSpecs(state, changes, false)
+    return renderSpecs(state, changes)
   }
   return renderChanges(state, changes)
 }

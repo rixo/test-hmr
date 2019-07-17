@@ -14,6 +14,7 @@ const { DEBUG } = process.env
 const originalGlobals = {}
 
 chai.use(require('sinon-chai'))
+chai.use(require('chai-as-promised'))
 chai.use(require('./chai-match-pattern'))
 
 const { expect } = chai
