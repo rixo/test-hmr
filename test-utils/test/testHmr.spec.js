@@ -1471,7 +1471,7 @@ describe('test utils: testHmr', () => {
         skipped: false,
       }))
 
-    describe('run as mocha single `it`', () => {
+    describe('config: { runSpecTagAsDescribe: false, describeByStep: false }', () => {
       const customizer = options => ({
         ...options,
         runTagAsDescribe: false,
@@ -1510,7 +1510,7 @@ describe('test utils: testHmr', () => {
       })
     })
 
-    describe('run as mocha `describe` with single `it` for each step', () => {
+    describe('config: { runSpecTagAsDescribe: true, describeByStep: true }', () => {
       const customizer = options => ({
         ...options,
         runTagAsDescribe: true,
@@ -1637,7 +1637,7 @@ describe('test utils: testHmr', () => {
       })
     })
 
-    describe('run as mocha `describe`', () => {
+    describe('config: { runSpecTagAsDescribe: true, describeByStep: false }', () => {
       const customizer = options => ({
         ...options,
         runTagAsDescribe: true,
