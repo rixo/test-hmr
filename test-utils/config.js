@@ -47,4 +47,4 @@ module.exports = {
 
 // TODO log
 // eslint-disable-next-line no-console
-console.info(`[HMR Tests] Running app: ${appPath}`)
+console.info(`[HMR Test] Running app: ${appPath}`)
