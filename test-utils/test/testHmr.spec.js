@@ -83,33 +83,32 @@ describe('test utils: testHmr', () => {
               skipped = true
             },
           }
-          const run = () => {
+          const run = async () => {
             if (handler) {
-              return Promise.resolve(handler.call(scope))
-                .then(value => {
-                  const result = {
-                    skipped,
-                    result: value,
-                    it: desc,
-                  }
-                  resolve()
-                  return result
-                })
-                .catch(error => {
-                  // don't reject the it, actual mocha's `it` never
-                  // throws/rejects... but do reject the test, to
-                  // prevent silent failures/errors
-                  const result = { error, skipped: false }
-                  reject(error)
-                  return result
-                })
+              try {
+                const value = await handler.call(scope)
+                const result = {
+                  skipped,
+                  result: value,
+                  it: desc,
+                }
+                resolve()
+                return result
+              } catch (error) {
+                // don't reject the it, actual mocha's `it` never
+                // throws/rejects... but do reject the test, to
+                // prevent silent failures/errors
+                const result = { error, skipped: false }
+                reject(error)
+                return result
+              }
             } else {
               const result = {
                 skipped: true,
                 it: desc,
               }
               resolve(result)
-              return Promise.resolve(result)
+              return result
             }
           }
           // previousItPromise: run tests in a series
@@ -182,9 +181,7 @@ describe('test utils: testHmr', () => {
 
   // h[mr, ]it...
   const makeHit = (title, handler, customizer, _it = it) =>
-    _it(title, () => {
-      return _testHmr(title, handler, customizer)
-    })
+    _it(title, () => _testHmr(title, handler, customizer))
   const hit = (title, handler) => makeHit(title, handler, null, it)
   hit.only = (title, handler) => makeHit(title, handler, null, it.only)
   hit.skip = (title, handler) => makeHit(title, handler, null, it.skip)
@@ -1465,11 +1462,7 @@ describe('test utils: testHmr', () => {
   }) // yield page
 
   describe('testHmr`...`', () => {
-    const runTest = wrapper =>
-      _testHmr('*under test*', null, null, wrapper).catch(error => ({
-        error,
-        skipped: false,
-      }))
+    const runTest = wrapper => _testHmr('*under test*', null, null, wrapper)
 
     describe('config: { runSpecTagAsDescribe: false, describeByStep: false }', () => {
       const customizer = options => ({
@@ -1477,10 +1470,7 @@ describe('test utils: testHmr', () => {
         runTagAsDescribe: false,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper).catch(error => ({
-          error,
-          skipped: false,
-        }))
+        _testHmr('*under test*', null, customizer, wrapper)
       it('can be used as a template literal', async () => {
         await runTest(
           testHmr => testHmr`
@@ -1491,7 +1481,7 @@ describe('test utils: testHmr', () => {
       })
 
       it('reports errors as test failure', async () => {
-        await runTest(
+        const promise = runTest(
           testHmr => testHmr`
             # my spec
             --- myfile ---
@@ -1500,6 +1490,7 @@ describe('test utils: testHmr', () => {
             ::0 something
           `
         )
+        await expect(promise, 'runTest').to.be.rejected
         expect(_it).to.have.been.calledOnce
         // use `it` return value instead of runTest result, to ensure that
         // the error really did pass through the test handler (as opposed to
@@ -1517,10 +1508,7 @@ describe('test utils: testHmr', () => {
         describeByStep: true,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper).catch(error => ({
-          error,
-          skipped: false,
-        }))
+        _testHmr('*under test*', null, customizer, wrapper)
 
       it('can be used as a template literal', async () => {
         await runTest(
@@ -1582,23 +1570,24 @@ describe('test utils: testHmr', () => {
           throw new Error('oops')
         }
         _page.$eval = sinon.fake.returns('I am file')
-        await runTest(
+        const result = runTest(
           testHmr => testHmr`
-          # my spec
-          ---- my-file ----
-          ::0 I am file
-          ****
-          ::0:: init
-            I am file
-          ::1:: crashes
-            I am file
-            ${sub}
-            I am file... not!
-          ::2:: skipped
-            Skipped
-            ${sub}
-        `
+            # my spec
+            ---- my-file ----
+            ::0 I am file
+            ****
+            ::0:: init
+              I am file
+            ::1:: crashes
+              I am file
+              ${sub}
+              I am file... not!
+            ::2:: skipped
+              Skipped
+              ${sub}
+          `
         )
+        await expect(result).to.be.rejected
         expect(_describe.args, 'describe args').to.matchPattern([
           ['my spec', {}],
           ['after update 0 (init)', {}],
@@ -1644,10 +1633,7 @@ describe('test utils: testHmr', () => {
         describeByStep: false,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper).catch(error => ({
-          error,
-          skipped: false,
-        }))
+        _testHmr('*under test*', null, customizer, wrapper)
 
       it('can be used as a template literal', async () => {
         await runTest(
@@ -1689,14 +1675,12 @@ describe('test utils: testHmr', () => {
     })
 
     it('throws on missing title', async () => {
-      const result = await runTest(
+      const result = runTest(
         testHmr => testHmr`
           ---- just-a-file ----
         `
       )
-      expect(result)
-        .to.have.nested.property('error.message')
-        .that.include('Expected title')
+      await expect(result).to.be.rejectedWith('Expected title')
     })
 
     it('runs simple assertions', async () => {
@@ -1738,7 +1722,7 @@ describe('test utils: testHmr', () => {
         let i = 0
         _page.$eval = sinon.fake(async () => results[i++])
       }
-      const { error } = await runTest(
+      await runTest(
         testHmr => testHmr`
           # my spec
           ---- my-file ----
@@ -1751,7 +1735,6 @@ describe('test utils: testHmr', () => {
           ::
         `
       )
-      if (error) throw error
       expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
       expect(sub, 'sub').to.have.been.calledOnce
     })
@@ -1761,7 +1744,7 @@ describe('test utils: testHmr', () => {
         throw new Error('oops')
       }
       _page.$eval = sinon.fake.returns('I am file')
-      await runTest(
+      const result = runTest(
         testHmr => testHmr`
           # my spec
           ---- my-file ----
@@ -1776,6 +1759,7 @@ describe('test utils: testHmr', () => {
             Skipped
         `
       )
+      await expect(result).to.be.rejected
       expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
       expect(_it, 'it')
         .to.have.been.calledThrice //
@@ -1809,7 +1793,7 @@ describe('test utils: testHmr', () => {
 
       _page.$eval = sinon.fake.returns('i am phil')
 
-      const { error } = await runTest(
+      await runTest(
         testHmr => testHmr`
           # my spec
           ---- my-file ----
@@ -1822,8 +1806,6 @@ describe('test utils: testHmr', () => {
           ::
         `
       )
-
-      if (error) throw error
 
       function* ensureInit() {
         const state = yield $$debug()
