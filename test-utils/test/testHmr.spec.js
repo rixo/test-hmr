@@ -146,8 +146,6 @@ describe('test utils: testHmr', () => {
           }
         })
 
-        const describeSkip = title => _describe(title)
-
         const _before = handler =>
           new Promise((resolve, reject) => {
             setImmediate(() => {
@@ -159,7 +157,6 @@ describe('test utils: testHmr', () => {
           it: _it,
           describe: _describe,
           actualDescribe: _describe,
-          describeSkip,
           before: _before,
           reset,
           writeHmr,
@@ -1477,7 +1474,7 @@ describe('test utils: testHmr', () => {
             # my spec
           `
         )
-        expect(_it).to.have.been.calledOnce
+        expect(_it).to.have.been.calledOnceWith('my spec')
       })
 
       it('reports errors as test failure', async () => {
@@ -1511,12 +1508,17 @@ describe('test utils: testHmr', () => {
         _testHmr('*under test*', null, customizer, wrapper)
 
       it('can be used as a template literal', async () => {
+        _page.$eval = sinon.fake.returns('foo')
         await runTest(
           testHmr => testHmr`
             # my spec
+            --- App.svelte ---
+            ::0 foo
+            * * *
+            ::0 foo
           `
         )
-        expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
+        expect(_describe, 'describe').to.have.been.calledWith('my spec')
       })
 
       it('runs conditions with `describe`', async () => {
@@ -1636,9 +1638,15 @@ describe('test utils: testHmr', () => {
         _testHmr('*under test*', null, customizer, wrapper)
 
       it('can be used as a template literal', async () => {
+        _page.$eval = sinon.fake.returns('foo')
         await runTest(
           testHmr => testHmr`
             # my spec
+            --- App.svelte ---
+            ::0 foo
+            * * *
+            ::0 foo
+            ::1 foo
           `
         )
         expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
@@ -1666,18 +1674,20 @@ describe('test utils: testHmr', () => {
     })
 
     it('marks tests with no assertions as skipped', async () => {
-      const result = await runTest(
+      const result = runTest(
         testHmr => testHmr`
           # my spec
         `
       )
-      expect(result && result.skipped, 'test has been skipped').to.be.true
+      await expect(result).to.be.rejectedWith('no assertions')
     })
 
     it('throws on missing title', async () => {
       const result = runTest(
         testHmr => testHmr`
           ---- just-a-file ----
+          * * *
+          ::0
         `
       )
       await expect(result).to.be.rejectedWith('Expected title')

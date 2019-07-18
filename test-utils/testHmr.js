@@ -584,11 +584,22 @@ const runAsDescribeTag = (config, strings, values) => {
   }
   // guard: no expectations => skip
   if (!ast.expects || !ast.expects.length) {
-    config.describeSkip(title)
+    config.it(title, () => {
+      let msg = 'no assertions'
+      const match = /((\w+)::)/.exec(source)
+      if (match) {
+        msg += ` -- are you mistaking "${match[1]}" for "::${match[2]}"?`
+      }
+      expect.fail(msg)
+    })
     return
   }
   // guard: only one update case => run as 'it'
-  if (ast.expects.length === 1 && ast.expects[0][1].steps.length === 1) {
+  if (
+    !config.describeByStep &&
+    ast.expects.length === 1 &&
+    ast.expects[0][1].steps.length === 1
+  ) {
     return config.it(title, function() {
       return runTagHandler(config, ast)
     })
@@ -689,7 +700,6 @@ const configDefaults = {
   it,
   describe,
   actualDescribe: describe,
-  describeSkip: it.skip, // use `it` because skipped describe are not reported
   before,
   loadPage,
   // TODO remove dep on global
