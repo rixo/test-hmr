@@ -51,6 +51,35 @@ describe('basic HMR', () => {
     ::1 <h1>I am Reloaded</h1>
   `
 
+  // 2019-07-18 this was broken in svelte-dev-helper
+  testHmr`
+    # rerenders all instances of same child
+
+    --- App.svelte ---
+
+    <script>
+      import Child from './Child'
+    </script>
+
+    <Child name="foo" />
+    <Child name="bar" />
+    <Child name="baz" />
+
+    --- Child.svelte ---
+
+    <script>
+      export let name
+    </script>
+
+    ::0 I am {name}.
+    ::1 My name is {name}.
+
+    * * *
+
+    ::0 I am foo. I am bar. I am baz.
+    ::1 My name is foo. My name is bar. My name is baz.
+  `
+
   testHmr`
     # updates children elements
 
@@ -94,11 +123,21 @@ describe('basic HMR', () => {
       import Child from './Child'
     </script>
 
-    <p>Pre</p>
-    <Child name="foo" />
-    <p>Mid</p>
-    <Child name="bar" />
-    <p>Post</p>
+    ::0::
+
+      <p>Pre</p>
+      <Child name="foo" />
+      <p>Mid</p>
+      <Child name="bar" />
+      <p>Post</p>
+
+    ::2::
+
+      <p>avant</p>
+      <Child name="foo" />
+      <p>pendant</p>
+      <Child name="bar" />
+      <p>après</p>
 
     ---- Child.svelte ----
 
@@ -107,51 +146,43 @@ describe('basic HMR', () => {
     </script>
 
     ::0 <h2>I am {name}</h2>
+
     ::1 <h3>My name is {name}</h3>
 
-    ****
+    ::3 <h3>Who's {name}?</h3>
 
-    <p>Pre</p>
-    0:: <h2>I am foo</h2>
-    1:: <h2>My name is foo</h2>
-    <p>Mid</p>
-    0:: <h2>I am bar</h2>
-    1:: <h2>My name is bar</h2>
-    <p>Post</p>
-  `
+    * * * *
 
-  testHmr`
-    # preserves children props when parent changes
+    ::0:: init
 
-    ---- App.svelte ----
+      <p>Pre</p>
+      <h2>I am foo</h2>
+      <p>Mid</p>
+      <h2>I am bar</h2>
+      <p>Post</p>
 
-    <script>
-      import Child from './Child'
-    </script>
+    ::1:: child changed
 
-    <p>Pre</p>
-    <Child name="foo" />
-    <p>Mid</p>
-    <Child name="bar" />
-    <p>Post</p>
+      <p>Pre</p>
+      <h3>My name is foo</h3>
+      <p>Mid</p>
+      <h3>My name is bar</h3>
+      <p>Post</p>
 
-    ---- Child.svelte ----
+    ::2:: parent changed
 
-    <script>
-      export let name = 'Child'
-    </script>
+      <p>avant</p>
+      <h3>My name is foo</h3>
+      <p>pendant</p>
+      <h3>My name is bar</h3>
+      <p>après</p>
 
-    ::0 <h2>I am {name}</h2>
-    ::1 <h3>My name is {name}</h3>
+    ::3:: child changed again
 
-    ****
-
-    <p>Pre</p>
-    0:: <h2>I am foo</h2>
-    1:: <h2>My name is foo</h2>
-    <p>Mid</p>
-    0:: <h2>I am bar</h2>
-    1:: <h2>My name is bar</h2>
-    <p>Post</p>
+      <p>avant</p>
+      <h3>Who's foo?</h3>
+      <p>pendant</p>
+      <h3>Who's bar?</h3>
+      <p>après</p>
   `
 })

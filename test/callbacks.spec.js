@@ -24,6 +24,7 @@ describe('callbacks', () => {
 
     <button on:click />
 
+    ::0
     ::1 updated
 
     * * * * * * * *
@@ -31,10 +32,13 @@ describe('callbacks', () => {
     <button></button>
 
     ::0:: callback is working
+
       0
       ${clickButton()}
       1
+
     ::1:: callback is attached to new (version of) component
+
       updated 1
       ${clickButton()}
       updated 2
