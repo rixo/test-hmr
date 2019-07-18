@@ -509,15 +509,9 @@ const runHandler = async (config, handler) => {
   //
   const initTest = async () => {
     await reset(state.inits)
-    delete state.inits // free mem
 
     // compile expectations
     state.remainingExpects = [...state.expects]
-
-    if (state.initSpecLabel !== null) {
-      ensureFirstExpect(state, state.initSpecLabel)
-      await consumeExpects(state, state.initSpecLabel, true)
-    }
   }
 
   const start = async firstEffect => {
@@ -529,6 +523,12 @@ const runHandler = async (config, handler) => {
 
     const inPage = async page => {
       state.page = page
+
+      if (state.initSpecLabel !== null) {
+        ensureFirstExpect(state, state.initSpecLabel)
+        await consumeExpects(state, state.initSpecLabel, true)
+      }
+
       const firstValue = firstEffect && (await processEffect(firstEffect))
       await consume(gen, processEffect, firstValue)
       await flushExpects(state)
@@ -559,6 +559,18 @@ const stepTitle = (step, i) => {
   return title
 }
 
+const runTagHandler = (cfg, ast) =>
+  runHandler(cfg, function*() {
+    yield {
+      type: SET_SPEC,
+      ast,
+    }
+    const firstLabel = ast.expects && ast.expects[0] && ast.expects[0][0]
+    if (firstLabel) {
+      yield commands.init(firstLabel)
+    }
+  })
+
 const runAsDescribeTag = (config, strings, values) => {
   const { source, functions } = interpolateFunctions(strings, values)
   const { title } = parseTitleOnly(source)
@@ -578,12 +590,7 @@ const runAsDescribeTag = (config, strings, values) => {
   // guard: only one update case => run as 'it'
   if (ast.expects.length === 1 && ast.expects[0][1].steps.length === 1) {
     return config.it(title, function() {
-      return runHandler(config, function*() {
-        yield {
-          type: SET_SPEC,
-          ast,
-        }
-      })
+      return runTagHandler(config, ast)
     })
   }
   // nominal: run as 'describe'
@@ -657,12 +664,7 @@ const runAsDescribeTag = (config, strings, values) => {
     config.before(async () => {
       const cfg = { ...config, its }
       try {
-        await runHandler(cfg, function*() {
-          yield {
-            type: SET_SPEC,
-            ast,
-          }
-        })
+        return runTagHandler(cfg, ast)
       } catch (err) {
         globalError = err
       }
@@ -678,12 +680,7 @@ const runAsItTag = (config, strings, values) => {
     if (!ast.expects) {
       this.skip()
     } else {
-      return runHandler(config, function*() {
-        yield {
-          type: SET_SPEC,
-          ast,
-        }
-      })
+      return runTagHandler(config, ast)
     }
   })
 }

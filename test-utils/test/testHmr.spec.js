@@ -1738,8 +1738,7 @@ describe('test utils: testHmr', () => {
         let i = 0
         _page.$eval = sinon.fake(async () => results[i++])
       }
-      let error
-      await runTest(
+      const { error } = await runTest(
         testHmr => testHmr`
           # my spec
           ---- my-file ----
@@ -1751,10 +1750,8 @@ describe('test utils: testHmr', () => {
             <h2>I am step2</h2>
           ::
         `
-      ).catch(err => {
-        error = err
-      })
-      expect(error, 'error').to.be.undefined
+      )
+      if (error) throw error
       expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
       expect(sub, 'sub').to.have.been.calledOnce
     })
@@ -1805,6 +1802,37 @@ describe('test utils: testHmr', () => {
           skipped: true,
         },
       ])
+    })
+
+    it('regiters first HMR case (cond) as init file set', async () => {
+      const sub = sinon.fake(ensureInit)
+
+      _page.$eval = sinon.fake.returns('i am phil')
+
+      const { error } = await runTest(
+        testHmr => testHmr`
+          # my spec
+          ---- my-file ----
+          i am phil
+          ****
+          ::0::
+            i am phil
+            ${sub}
+            i am phil
+          ::
+        `
+      )
+
+      if (error) throw error
+
+      function* ensureInit() {
+        const state = yield $$debug()
+        expect(state).to.matchPattern({
+          inits: { 'my-file': /\s*i am phil\s*/ },
+        })
+      }
+
+      expect(sub, 'ensureInit').to.have.been.calledOnce
     })
   })
 })
