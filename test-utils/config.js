@@ -1,7 +1,7 @@
 const path = require('path')
 
 const {
-  env: { APP = 'app', DETAIL = 1, E2E, RC_HTTP = 0 },
+  env: { APP = 'app', DETAIL = 1, WATCH = 0, E2E = true, RC_HTTP = 0 },
 } = process
 
 const isAbsolutePath = name => /^(?:\/|\w+:)/.test(name)
@@ -33,11 +33,12 @@ module.exports = {
   // is not completely implemented yet
   //
   fastResetStrategy: true,
+  // keep webpack & puppeteer running between test runs, in watch mode
+  keepRunning: WATCH && WATCH != '0',
 
-  // they're slow, so they're annoying during active dev... by default,
-  // they're disabled when watching
-  selfIntegrationTests: E2E != 0,
-
+  // self integration tests: they're slow, so they're annoying during active
+  // dev... by default, they're disabled when watching
+  //
   // 0, or 'skip' -- default: true
   e2e: E2E,
 

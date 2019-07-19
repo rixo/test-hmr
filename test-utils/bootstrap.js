@@ -9,7 +9,7 @@ const config = require('./config')
 
 const { expect } = chai
 
-const { fastResetStrategy } = config
+const { fastResetStrategy, keepRunning } = config
 
 const { DEBUG } = process.env
 
@@ -29,7 +29,11 @@ const setGlobals = values => {
 }
 
 const restoreGlobals = () => {
-  Object.entries(originalGlobals).forEach(([key, value]) => {
+  let entries = Object.entries(originalGlobals)
+  if (keepRunning) {
+    entries = entries.filter(([key]) => key !== 'app' && key !== 'browser')
+  }
+  entries.forEach(([key, value]) => {
     global[key] = value
   })
 }
@@ -65,13 +69,22 @@ const startPuppeteer = async () => {
 }
 
 function setupPuppeteer() {
+  let browser
   before(async () => {
-    const browser = await startPuppeteer()
-    setGlobals({ browser })
+    if (keepRunning && global.browser) {
+      // eslint-disable-next-line no-console
+      console.debug('[HMR Test]', 'Reusing existing puppeteer')
+    } else {
+      browser = await startPuppeteer()
+      setGlobals({ browser })
+    }
   })
   after(async () => {
+    // guard: option keep running
+    if (keepRunning) return
+    // guard: no browser
+    if (!browser) return
     await browser.close()
-    restoreGlobals()
   })
 }
 
@@ -81,9 +94,9 @@ const setupDefaultWebpack = () => {
     app = await startWebpack()
     setGlobals({ app })
   })
-  afterEach(() => {
+  afterEach(async () => {
     if (app) {
-      return app.close().catch(err => {
+      await app.close().catch(err => {
         // eslint-disable-next-line no-console
         console.warn('Failed to close webpack dev server', err)
       })
@@ -94,16 +107,23 @@ const setupDefaultWebpack = () => {
 const setupFastWebpack = () => {
   let app
   before(async () => {
-    app = await startWebpack()
-    setGlobals({ app })
-  })
-  after(() => {
-    if (app) {
-      return app.close().catch(err => {
-        // eslint-disable-next-line no-console
-        console.warn('Failed to close webpack dev server', err)
-      })
+    if (keepRunning && global.app) {
+      // eslint-disable-next-line no-console
+      console.debug('[HMR Test]', 'Reusing existing webpack')
+    } else {
+      app = await startWebpack()
+      setGlobals({ app })
     }
+  })
+  after(async () => {
+    // guard: option keep running
+    if (keepRunning) return
+    // guard: no app
+    if (!app) return
+    await app.close().catch(err => {
+      // eslint-disable-next-line no-console
+      console.warn('Failed to close webpack dev server', err)
+    })
   })
 }
 
@@ -124,10 +144,15 @@ const setupBailOut = () => {
 
 const setupWebpack = fastResetStrategy ? setupFastWebpack : setupDefaultWebpack
 
+after(restoreGlobals)
+
 setGlobals({ expect, sinon, testHmr })
+
 initSelfTests()
+
+setupBailOut()
+
 if (config.e2e != 0 && config.e2e !== 'skip') {
   setupWebpack()
   setupPuppeteer()
 }
-setupBailOut()
