@@ -5,9 +5,9 @@
   "keywords": "webpack hmr test",
   "main": "index.js",
   "scripts": {
-    "test": "mocha lib/bootstrap.js test",
+    "test": "E2E=skip mocha test/bootstrap.js test",
     "test:watch": "WATCH=1 E2E=0 npm run test -- --watch",
-    "test:debug": "mocha debug lib/bootstrap.js test",
+    "test:debug": "mocha debug test/bootstrap.js test",
     "parser": "npx pegjs --allowed-start-rules Spec,FullSpec,TitleOnly lib/hmr-spec/hmr-spec-parser.pegjs",
     "parser:trace": "npx pegjs --allowed-start-rules Spec,FullSpec,TitleOnly --trace lib/hmr-spec/hmr-spec-parser.pegjs",
     "parser:watch": "nodemon --exec 'npm run parser' -w lib/hmr-spec/hmr-spec-parser.pegjs",
