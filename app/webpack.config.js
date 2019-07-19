@@ -1,16 +1,12 @@
 /* eslint-env node */
 
-const path = require('path')
 const MiniCssExtractPlugin = require('mini-css-extract-plugin')
-const webpack = require('webpack')
 
 const mode = process.env.NODE_ENV || 'development'
 const prod = mode === 'production'
 const dev = !prod
 
 module.exports = {
-  // context is needed so that we are not dependent on working dir
-  context: __dirname,
   entry: {
     bundle: ['./src/main.js'],
   },
@@ -59,12 +55,11 @@ module.exports = {
     new MiniCssExtractPlugin({
       filename: '[name].css',
     }),
-    new webpack.HotModuleReplacementPlugin(),
   ],
   devtool: prod ? false : 'source-map',
   devServer: {
     hot: true,
-    contentBase: path.join(__dirname, 'public'),
+    contentBase: 'public',
   },
   optimization: {
     minimize: false,
