@@ -25,7 +25,6 @@
     "chai-spies": "^1.0.0",
     "express": "^4.17.1",
     "fast-glob": "^3.0.4",
-    "glob": "^7.1.4",
     "linkfs": "^2.1.0",
     "lodash.escaperegexp": "^4.1.2",
     "lodash.set": "^4.3.2",
