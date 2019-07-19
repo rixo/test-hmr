@@ -1,13 +1,7 @@
 const fetch = require('node-fetch')
 
-const {
-  reset,
-  inPage,
-  innerText,
-  writeFiles,
-  hmrDone,
-} = require('../../test-utils')
-const config = require('../../test-utils/config')
+const { reset, inPage, innerText, writeFiles, hmrDone } = require('../lib')
+const config = require('../lib/config')
 
 describeE2e('test utils: sanity check', () => {
   it('can access puppeteer', async () => {

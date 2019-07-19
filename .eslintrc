@@ -3,20 +3,19 @@ extends:
 
 env:
   node: true
+  mocha: true
 
-overrides:
-  - files: ["test/**", "test-utils/**"]
-    env:
-      mocha: true
-    globals:
-      browser: true
-      app: true
-      expect: true
-      sinon: true
-      describeE2e: true
-      testHmr: true
-      cancelRunningTests: true
-    rules:
-      # chai assertions are often considred unused expressions
-      no-unused-expressions: off
-      require-atomic-updates: off
+globals:
+  browser: true
+  app: true
+  expect: true
+  sinon: true
+  describeE2e: true
+  testHmr: true
+  cancelRunningTests: true
+
+rules:
+  # chai assertions are often considered unused expressions
+  no-unused-expressions: off
+  # require-atomic-updates is broken
+  require-atomic-updates: off

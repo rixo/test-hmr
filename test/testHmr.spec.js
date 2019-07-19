@@ -9,7 +9,7 @@ const {
   change,
   innerText,
   page,
-} = require('../../test-utils/testHmr')
+} = require('../lib/testHmr')
 
 const noop = () => {}
 

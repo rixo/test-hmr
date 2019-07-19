@@ -1,8 +1,0 @@
-extends:
-  - '@rixo/svelte-native'
-
-settings:
-  import/resolver: 'webpack'
-  # svelte3/enabled: true
-  # svelte3/ignore-warnings: false
-  # svelte3/lint-template: false

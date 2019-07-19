@@ -1,6 +1,6 @@
-const normalizeHtml = require('../../test-utils/normalizeHtml')
+const normalizeHtml = require('../lib/normalizeHtml')
 
-describe('test-utils: normalizeHtml', () => {
+describe('normalizeHtml', () => {
   it('trims initial white spaces & new lines', () => {
     const result = normalizeHtml(`
 

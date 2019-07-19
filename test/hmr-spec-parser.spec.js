@@ -1,4 +1,4 @@
-const { parse } = require('../hmr-spec/hmr-spec-parser')
+const { parse } = require('../lib/hmr-spec/hmr-spec-parser')
 const escapeRegExp = require('lodash.escaperegexp')
 
 const parseSpec = (source, ...options) =>
