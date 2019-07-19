@@ -2,37 +2,33 @@ const { testHmr } = require('../test-utils/testHmr')
 
 describe('HMR: props', () => {
   testHmr`
-    # preserves children props when parent changes
+    # preserves props value
 
-    ---- App.svelte ----
+    --- App.svelte ---
 
     <script>
       import Child from './Child'
     </script>
 
-    <p>Pre</p>
     <Child name="foo" />
-    <p>Mid</p>
     <Child name="bar" />
-    <p>Post</p>
 
-    ---- Child.svelte ----
+    --- Child.svelte ---
 
     <script>
       export let name = 'Child'
     </script>
 
-    ::0 <h2>I am {name}</h2>
-    ::1 <h3>My name is {name}</h3>
+    ::0 I am {name}
+    ::1 My name is {name}
 
-    ****
+    * * *
 
-    <p>Pre</p>
-    0:: <h2>I am foo</h2>
-    1:: <h2>My name is foo</h2>
-    <p>Mid</p>
-    0:: <h2>I am bar</h2>
-    1:: <h2>My name is bar</h2>
-    <p>Post</p>
+    ::0::
+      I am foo
+      I am bar
+    ::1::
+      My name is foo
+      My name is bar
   `
 })
