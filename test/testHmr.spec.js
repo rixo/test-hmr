@@ -161,6 +161,7 @@ describe('test utils: testHmr', () => {
           reset,
           writeHmr,
           loadPage,
+          appHtmlPrefix: '',
         }
         if (customizer) {
           options = customizer(options)
