@@ -23,6 +23,7 @@
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
     "chai-spies": "^1.0.0",
+    "debug": "^4.1.1",
     "express": "^4.17.1",
     "fast-glob": "^3.0.4",
     "linkfs": "^2.1.0",
