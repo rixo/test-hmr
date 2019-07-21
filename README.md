@@ -16,10 +16,10 @@ bootstrap({
 })
 ```
 
-Run tests with your bootstrap file first:
+Require `test-hmr` to run your tests:
 
 ```bash
-npx mocha test
+npx mocha --require test-hmr test
 ```
 
 # TODO
