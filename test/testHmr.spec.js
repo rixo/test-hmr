@@ -1465,7 +1465,7 @@ describe('test utils: testHmr', () => {
     describe('config: { runSpecTagAsDescribe: false, describeByStep: false }', () => {
       const customizer = options => ({
         ...options,
-        runTagAsDescribe: false,
+        isRunSpecTagAsDescribe: () => false,
       })
       const runTest = wrapper =>
         _testHmr('*under test*', null, customizer, wrapper)
@@ -1502,8 +1502,8 @@ describe('test utils: testHmr', () => {
     describe('config: { runSpecTagAsDescribe: true, describeByStep: true }', () => {
       const customizer = options => ({
         ...options,
-        runTagAsDescribe: true,
-        describeByStep: true,
+        isRunSpecTagAsDescribe: () => true,
+        isDescribeByStep: () => true,
       })
       const runTest = wrapper =>
         _testHmr('*under test*', null, customizer, wrapper)
@@ -1632,8 +1632,8 @@ describe('test utils: testHmr', () => {
     describe('config: { runSpecTagAsDescribe: true, describeByStep: false }', () => {
       const customizer = options => ({
         ...options,
-        runTagAsDescribe: true,
-        describeByStep: false,
+        isRunSpecTagAsDescribe: () => true,
+        isDescribeByStep: () => false,
       })
       const runTest = wrapper =>
         _testHmr('*under test*', null, customizer, wrapper)
