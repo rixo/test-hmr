@@ -9,6 +9,7 @@ const {
   change,
   innerText,
   page,
+  beforeLoad,
 } = require('../lib/testHmr')
 
 const noop = () => {}
@@ -44,11 +45,18 @@ describe('test utils: testHmr', () => {
       _page.$eval.results = results
     }
     loadPage = sinon.fake(
-      (url, callback) =>
+      (url, callback, beforeGoto) =>
         new Promise((resolve, reject) => {
           // dezalgo
           setImmediate(() => {
-            Promise.resolve(callback(_page))
+            Promise.resolve(_page)
+              .then(async () => {
+                if (beforeGoto) {
+                  await beforeGoto(_page)
+                }
+                return _page
+              })
+              .then(callback)
               .then(resolve)
               .catch(reject)
           })
@@ -261,6 +269,33 @@ describe('test utils: testHmr', () => {
         'second.svelte': tpl2,
       })
     })
+  })
+
+  describe('yield beforeLoad(fn*)', () => {
+    it('is a command function', () => {
+      expect(beforeLoad).to.be.a('function')
+    })
+
+    hit('is exposed as this.beforeLoad', function*() {
+      expect(this.beforeLoad).to.equal(beforeLoad)
+    })
+
+    hit('registers a beforeLoad hook sub', registersSub)
+
+    describeE2e('e2e', () => {
+      hit.browser('registers a beforeLoad hook sub', registersSub)
+    })
+
+    function* registersSub() {
+      let pp
+      const sub = sinon.fake(function*() {
+        pp = yield page()
+      })
+      yield beforeLoad(sub)
+      const p = yield page()
+      expect(sub).to.have.been.calledOnce
+      expect(pp).to.equal(p)
+    }
   })
 
   describe('yield spec({...})', () => {
