@@ -19,9 +19,9 @@ bootstrap({
 Run tests with your bootstrap file first:
 
 ```bash
-npx mocha test/bootstrap.js 'test/**/*.spec.js'
+npx mocha test
 ```
 
 # TODO
 
-- [ ] e2e tests (needs a mock webpack app)
+- [ ] e2e self tests (needs a mock webpack app)
