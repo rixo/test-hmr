@@ -293,8 +293,8 @@ describe('test utils: testHmr', () => {
       })
       yield beforeLoad(sub)
       const p = yield page()
-      expect(sub).to.have.been.calledOnce
-      expect(pp).to.equal(p)
+      expect(sub, 'beforeLoad').to.have.been.calledOnce
+      expect(pp, 'yield page from beforeLoad').to.equal(p)
     }
   })
 
@@ -804,6 +804,18 @@ describe('test utils: testHmr', () => {
         expects: new Map([['0', { steps: [{ html: _`` }] }]]),
       })
       yield spec.$$discard()
+    })
+
+    hit('parses beforeLoad hook', function*() {
+      const sub = function*() {}
+      yield spec`
+        --- file.php ---
+        * * *
+        ${sub}
+        ::0
+      `
+      const state = yield $$debug()
+      expect(state.beforeLoad, 'state.beforeLoad').to.equal(sub)
     })
 
     // kitchen sink
