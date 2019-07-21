@@ -1462,6 +1462,32 @@ describe('test utils: testHmr', () => {
   describe('testHmr`...`', () => {
     const runTest = wrapper => _testHmr('*under test*', null, null, wrapper)
 
+    const commons = (runTest, mainTest) => {
+      it('can be used as a template literal', async () => {
+        _page.$eval = sinon.fake.returns('foo')
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+            --- App.svelte ---
+            ::0 foo
+            * * *
+            ::0 foo
+            ::1 foo
+          `
+        )
+        expect(mainTest(), 'describe or it').to.have.been.calledWith('my spec')
+      })
+
+      it('marks tests with no assertions as skipped', async () => {
+        const result = runTest(
+          testHmr => testHmr`
+            # my spec
+          `
+        )
+        await expect(result).to.be.rejectedWith('no assertions')
+      })
+    }
+
     describe('config: { runSpecTagAsDescribe: false, describeByStep: false }', () => {
       const customizer = options => ({
         ...options,
@@ -1469,14 +1495,8 @@ describe('test utils: testHmr', () => {
       })
       const runTest = wrapper =>
         _testHmr('*under test*', null, customizer, wrapper)
-      it('can be used as a template literal', async () => {
-        await runTest(
-          testHmr => testHmr`
-            # my spec
-          `
-        )
-        expect(_it).to.have.been.calledOnceWith('my spec')
-      })
+
+      commons(runTest, () => _it)
 
       it('reports errors as test failure', async () => {
         const promise = runTest(
@@ -1508,19 +1528,7 @@ describe('test utils: testHmr', () => {
       const runTest = wrapper =>
         _testHmr('*under test*', null, customizer, wrapper)
 
-      it('can be used as a template literal', async () => {
-        _page.$eval = sinon.fake.returns('foo')
-        await runTest(
-          testHmr => testHmr`
-            # my spec
-            --- App.svelte ---
-            ::0 foo
-            * * *
-            ::0 foo
-          `
-        )
-        expect(_describe, 'describe').to.have.been.calledWith('my spec')
-      })
+      commons(runTest, () => _describe)
 
       it('runs conditions with `describe`', async () => {
         _page.$eval.return('<h1>I am file</h1>', '<h1>I am still</h1>')
@@ -1638,6 +1646,8 @@ describe('test utils: testHmr', () => {
       const runTest = wrapper =>
         _testHmr('*under test*', null, customizer, wrapper)
 
+      commons(runTest, () => _describe)
+
       it('can be used as a template literal', async () => {
         _page.$eval = sinon.fake.returns('foo')
         await runTest(
@@ -1672,15 +1682,55 @@ describe('test utils: testHmr', () => {
           .and.calledWith('after update 1')
         expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
       })
-    })
 
-    it('marks tests with no assertions as skipped', async () => {
-      const result = runTest(
-        testHmr => testHmr`
-          # my spec
-        `
-      )
-      await expect(result).to.be.rejectedWith('no assertions')
+      it('marks failed `it` cases as failure and skip subsequent cases', async () => {
+        function* sub() {
+          throw new Error('oops')
+        }
+        _page.$eval = sinon.fake.returns('I am file')
+        const result = runTest(
+          testHmr => testHmr`
+            # my spec
+            ---- my-file ----
+            ::0 I am file
+            ****
+            ::0:: init
+              I am file
+            ::1:: crashes
+              I am file... not!
+              ${sub}
+            ::2:: skipped
+              Skipped
+          `
+        )
+        await expect(result).to.be.rejected
+        expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
+        expect(_it, 'it')
+          .to.have.been.calledThrice //
+          .and.calledWith('after update 0 (init)')
+          .and.calledWith('after update 1 (crashes)')
+          .and.calledWith('after update 2 (skipped)')
+        // use `it` return value instead of runTest result, to ensure that
+        // the error really did pass through the test handler (as opposed to
+        // some kind of possible test artifact)
+        const results = await Promise.all(_it.returnValues)
+        // console.log(results)
+        expect(results, 'it return values').to.matchPattern([
+          {
+            error: undefined,
+            skipped: false,
+          },
+          {
+            error: {
+              message: /\bexpected\b/,
+            },
+          },
+          {
+            error: undefined,
+            skipped: true,
+          },
+        ])
+      })
     })
 
     it('throws on missing title', async () => {
@@ -1748,55 +1798,6 @@ describe('test utils: testHmr', () => {
       )
       expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
       expect(sub, 'sub').to.have.been.calledOnce
-    })
-
-    it('marks failed `it` cases as failure and skip subsequent cases', async () => {
-      function* sub() {
-        throw new Error('oops')
-      }
-      _page.$eval = sinon.fake.returns('I am file')
-      const result = runTest(
-        testHmr => testHmr`
-          # my spec
-          ---- my-file ----
-          ::0 I am file
-          ****
-          ::0:: init
-            I am file
-          ::1:: crashes
-            I am file... not!
-            ${sub}
-          ::2:: skipped
-            Skipped
-        `
-      )
-      await expect(result).to.be.rejected
-      expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
-      expect(_it, 'it')
-        .to.have.been.calledThrice //
-        .and.calledWith('after update 0 (init)')
-        .and.calledWith('after update 1 (crashes)')
-        .and.calledWith('after update 2 (skipped)')
-      // use `it` return value instead of runTest result, to ensure that
-      // the error really did pass through the test handler (as opposed to
-      // some kind of possible test artifact)
-      const results = await Promise.all(_it.returnValues)
-      // console.log(results)
-      expect(results, 'it return values').to.matchPattern([
-        {
-          error: undefined,
-          skipped: false,
-        },
-        {
-          error: {
-            message: /\bexpected\b/,
-          },
-        },
-        {
-          error: undefined,
-          skipped: true,
-        },
-      ])
     })
 
     it('regiters first HMR case (cond) as init file set', async () => {
