@@ -40,6 +40,9 @@ describe('test utils: testHmr', () => {
       keyboard: {
         press: sinon.fake(),
       },
+      on: noop,
+      once: noop,
+      removeListener: noop,
     }
     _page.$eval.return = (...results) => {
       _page.$eval.results = results
@@ -1545,6 +1548,21 @@ describe('test utils: testHmr', () => {
 
       commons(runTest, () => _it)
 
+      it('registers single conditions with `it`', async () => {
+        _page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
+        await runTest(
+          testHmr => testHmr`
+            # my spec
+            ---- my-file ----
+            <h1>I am file</h1>
+            ****
+            ::0 <h1>I am file</h1>
+          `
+        )
+        expect(_it, 'it').to.have.been.calledOnceWith('my spec')
+        expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
+      })
+
       it('reports errors as test failure', async () => {
         const promise = runTest(
           testHmr => testHmr`
@@ -1695,19 +1713,19 @@ describe('test utils: testHmr', () => {
 
       commons(runTest, () => _describe)
 
-      it('can be used as a template literal', async () => {
-        _page.$eval = sinon.fake.returns('foo')
+      it('registers single conditions with `it`', async () => {
+        _page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
         await runTest(
           testHmr => testHmr`
             # my spec
-            --- App.svelte ---
-            ::0 foo
-            * * *
-            ::0 foo
-            ::1 foo
+            ---- my-file ----
+            <h1>I am file</h1>
+            ****
+            ::0 <h1>I am file</h1>
           `
         )
-        expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
+        expect(_it, 'it').to.have.been.calledOnceWith('my spec')
+        expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
       })
 
       it('runs conditions with `it`', async () => {
@@ -1802,21 +1820,6 @@ describe('test utils: testHmr', () => {
           ::0 <h1>I am file</h1>
         `
       )
-      expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
-    })
-
-    it('registers single conditions with `it`', async () => {
-      _page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
-      await runTest(
-        testHmr => testHmr`
-          # my spec
-          ---- my-file ----
-          <h1>I am file</h1>
-          ****
-          ::0 <h1>I am file</h1>
-        `
-      )
-      expect(_it, 'it').to.have.been.calledOnceWith('my spec')
       expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
     })
 
