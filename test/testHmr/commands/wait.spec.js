@@ -1,8 +1,6 @@
 const hit = require('../hit')
 
-const {
-  commands: { wait },
-} = require('@/lib/testHmr/commands')
+const { wait } = require('./commands')
 
 describe('command: wait', () => {
   let mock
