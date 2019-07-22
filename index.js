@@ -1,4 +1,4 @@
-const { commands } = require('./lib/testHmr.commands')
+const { commands } = require('./lib/testHmr/commands')
 
 module.exports = {
   testHmr: require('./lib/testHmr'),
