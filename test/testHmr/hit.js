@@ -194,7 +194,9 @@ const setup = () => {
 hit.beforeEach = onBeforeEach => {
   beforeEach(() => {
     setup()
-    onBeforeEach(mock)
+    if (onBeforeEach) {
+      onBeforeEach(mock)
+    }
   })
 }
 
