@@ -1,7 +1,8 @@
 const escapeRegExp = require('lodash.escaperegexp')
 
+const hit = require('./testHmr/hit')
+
 const {
-  testHmr: { create: createTestHmr },
   templates,
   spec,
   init,
@@ -12,215 +13,30 @@ const {
   beforeLoad,
 } = require('../lib/testHmr')
 
-const noop = () => {}
-
 // _`foo` => /\s*foo\s*/
 // _('foo', bar', 'baz') => /\s*foo\s*bar\s*baz\s*/
 const _ = strings =>
   new RegExp('\\s*' + strings.map(escapeRegExp).join('\\s*') + '\\s*')
 
 describe('test utils: testHmr', () => {
-  let _it
-  let _describe
-  let reset
-  let writeHmr
-  let _page
-  let loadPage
-  let _testHmr
-
-  beforeEach(() => {
-    _it = null
-    _describe = null
-    reset = sinon.fake()
-    writeHmr = sinon.fake(async () => {})
-    _page = {
-      $eval: sinon.fake(() => {
-        return _page.$eval.results && _page.$eval.results.shift()
-      }),
-      keyboard: {
-        press: sinon.fake(),
-      },
-      on: noop,
-      once: noop,
-      removeListener: noop,
-    }
-    _page.$eval.return = (...results) => {
-      _page.$eval.results = results
-    }
-    loadPage = sinon.fake(
-      (url, callback, beforeGoto) =>
-        new Promise((resolve, reject) => {
-          // dezalgo
-          setImmediate(() => {
-            Promise.resolve(_page)
-              .then(async () => {
-                if (beforeGoto) {
-                  await beforeGoto(_page)
-                }
-                return _page
-              })
-              .then(callback)
-              .then(resolve)
-              .catch(reject)
-          })
-        })
-    )
-
-    _testHmr = (title, handler, customizer, executer) =>
-      new Promise((resolve, reject) => {
-        let rootPromises
-        let previousItPromise
-
-        const startIt = () => {
-          if (rootPromises) {
-            const deferred = {}
-            const promise = new Promise((resolve, reject) => {
-              deferred.resolve = resolve
-              deferred.reject = reject
-            })
-            rootPromises.push(promise)
-            return deferred
-          } else {
-            return { resolve, reject }
-          }
-        }
-
-        _it = sinon.fake((desc, handler) => {
-          const { resolve } = startIt()
-          let skipped = false
-          const scope = {
-            slow: noop,
-            skip: () => {
-              skipped = true
-            },
-          }
-          const run = async () => {
-            if (handler) {
-              try {
-                const value = await handler.call(scope)
-                const result = {
-                  skipped,
-                  result: value,
-                  it: desc,
-                }
-                resolve()
-                return result
-              } catch (error) {
-                // don't reject the it, actual mocha's `it` never
-                // throws/rejects... but do reject the test, to
-                // prevent silent failures/errors
-                const result = { error, skipped: false }
-                reject(error)
-                return result
-              }
-            } else {
-              const result = {
-                skipped: true,
-                it: desc,
-              }
-              resolve(result)
-              return result
-            }
-          }
-          // previousItPromise: run tests in a series
-          const prev = previousItPromise
-          previousItPromise = Promise.resolve(prev).then(run)
-          return previousItPromise
-        })
-
-        _describe = sinon.fake((desc, handler) => {
-          let promises
-          if (!rootPromises) {
-            // claim root
-            promises = []
-            rootPromises = promises
-          }
-          const scope = {
-            slow: noop,
-            skip: () => {
-              throw new Error('TODO')
-            },
-          }
-          if (handler) {
-            handler.call(scope)
-          }
-          if (promises) {
-            Promise.all(promises)
-              .then(results => {
-                resolve({
-                  result: results,
-                  describe: desc,
-                  skipped: !handler,
-                })
-              })
-              .catch(reject)
-          }
-        })
-
-        const _before = handler =>
-          new Promise((resolve, reject) => {
-            setImmediate(() => {
-              Promise.resolve(handler()).then(resolve, reject)
-            })
-          })
-
-        let options = {
-          it: _it,
-          describe: _describe,
-          actualDescribe: _describe,
-          before: _before,
-          reset,
-          writeHmr,
-          loadPage,
-          appHtmlPrefix: '',
-        }
-        if (customizer) {
-          options = customizer(options)
-        }
-        const testHmr = createTestHmr(options)
-        if (executer) {
-          return executer(testHmr)
-        } else if (typeof title === 'function') {
-          return testHmr(null, title)
-        } else {
-          return testHmr(title, handler)
-        }
-      })
+  let mock
+  hit.beforeEach(m => {
+    mock = m
   })
 
-  // h[mr, ]it...
-  const makeHit = (title, handler, customizer, _it = it) =>
-    _it(title, () => _testHmr(title, handler, customizer))
-  const hit = (title, handler) => makeHit(title, handler, null, it)
-  hit.only = (title, handler) => makeHit(title, handler, null, it.only)
-  hit.skip = (title, handler) => makeHit(title, handler, null, it.skip)
-  // custom
-  // hit.browser: doesn't mock browser
-  const makeBrowserHit = it => (title, handler) =>
-    makeHit(
-      title,
-      handler,
-      // eslint-disable-next-line no-unused-vars
-      ({ reset, writeHmr, loadPage, ...opts }) => opts,
-      it
-    )
-  hit.browser = makeBrowserHit(it)
-  hit.browser.only = makeBrowserHit(it.only)
-  hit.browser.skip = makeBrowserHit(it.skip)
-
   hit("wraps mocha's it", function*() {
-    expect(_it).to.have.been.calledOnce
+    expect(mock.it).to.have.been.calledOnce
   })
 
   hit('inits app after the first non-init effect', function*() {
     yield templates({})
     yield init({})
-    expect(reset).not.to.have.been.called
-    expect(loadPage).not.to.have.been.called
+    expect(mock.reset).not.to.have.been.called
+    expect(mock.loadPage).not.to.have.been.called
     yield innerText('*')
-    expect(reset).to.have.been.calledOnce
-    expect(loadPage).to.have.been.calledOnce
-    expect(writeHmr).not.to.have.been.called
+    expect(mock.reset).to.have.been.calledOnce
+    expect(mock.loadPage).to.have.been.calledOnce
+    expect(mock.writeHmr).not.to.have.been.called
   })
 
   describe('yield debug()', () => {
@@ -990,8 +806,8 @@ describe('test utils: testHmr', () => {
           expect(step0, 'step0').to.have.been.calledOnce
         })
         // test
-        await _testHmr('kitchen sink', function*() {
-          _page.$eval = sinon.fake(
+        await mock.testHmr('kitchen sink', function*() {
+          mock.page.$eval = sinon.fake(
             async () => `
               <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
             `
@@ -1033,8 +849,8 @@ describe('test utils: testHmr', () => {
           expect(step0, 'step0').to.have.been.calledOnce
         })
         // test
-        await _testHmr('kitchen sink', function*() {
-          _page.$eval = sinon.fake(
+        await mock.testHmr('kitchen sink', function*() {
+          mock.page.$eval = sinon.fake(
             async () => `
               <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
             `
@@ -1123,7 +939,7 @@ describe('test utils: testHmr', () => {
     it('flushes remaining steps when generator returns', async () => {
       const expects = {}
 
-      await _testHmr('kitchen sink', function*() {
+      await mock.testHmr('kitchen sink', function*() {
         for (let i = 0; i < 4; i++) {
           expects[i] = sinon.fake()
           yield spec.expect(i, expects[i])
@@ -1152,7 +968,7 @@ describe('test utils: testHmr', () => {
       const expects = {
         0: sinon.fake(),
       }
-      await _testHmr('kitchen sink', function*() {
+      await mock.testHmr('kitchen sink', function*() {
         yield spec.expect(0, expects[0])
         expect(expects[0]).not.to.have.been.called
       })
@@ -1164,8 +980,8 @@ describe('test utils: testHmr', () => {
       function* sub(...args) {
         fakeSub(...args) // tracks calls for us
       }
-      _page.$eval = sinon.fake(async () => 'html')
-      await _testHmr('kitchen sink', function*() {
+      mock.page.$eval = sinon.fake(async () => 'html')
+      await mock.testHmr('kitchen sink', function*() {
         yield this.spec.expect(0, 'html')
         yield this.spec.expect(0, sub)
         expect(fakeSub, 'sub').to.not.have.been.called
@@ -1174,15 +990,15 @@ describe('test utils: testHmr', () => {
     })
 
     it('runs empty html expects', async () => {
-      _page.$eval.return('')
-      await _testHmr('runs empty html expects', function*() {
+      mock.page.$eval.return('')
+      await mock.testHmr('runs empty html expects', function*() {
         yield spec.expect(0, '')
         const state = yield $$debug()
         expect(state).to.matchPattern({
           expects: new Map([['0', { steps: [{ html: _`` }] }]]),
         })
       })
-      expect(_page.$eval).to.have.been.calledOnce
+      expect(mock.page.$eval).to.have.been.calledOnce
     })
   })
 
@@ -1190,8 +1006,8 @@ describe('test utils: testHmr', () => {
     it('flushes remaining steps when generator returns', async () => {
       const after = sinon.fake(function* after() {})
 
-      await _testHmr('kitchen sink', function*() {
-        _page.$eval = sinon.fake(
+      await mock.testHmr('kitchen sink', function*() {
+        mock.page.$eval = sinon.fake(
           async () => `
             <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
           `
@@ -1218,7 +1034,7 @@ describe('test utils: testHmr', () => {
     })
 
     hit('matches full result content', function*() {
-      _page.$eval = sinon.fake(
+      mock.page.$eval = sinon.fake(
         async () => `
           <h2>Kild: I am expected</h2><!--<Child>--><!--<App>-->
         `
@@ -1241,7 +1057,7 @@ describe('test utils: testHmr', () => {
     })
 
     hit('collapses white spaces between tags to match HTML', function*() {
-      _page.$eval = sinon.fake(
+      mock.page.$eval = sinon.fake(
         async () => `
           <h1>I  am  title</h1>
           <p>
@@ -1277,7 +1093,7 @@ describe('test utils: testHmr', () => {
         `,
       }
       let i = 0
-      _page.$eval = sinon.fake(async () => results[i++])
+      mock.page.$eval = sinon.fake(async () => results[i++])
       yield spec(`
         ---- App.svelte ----
         <script>
@@ -1360,32 +1176,32 @@ describe('test utils: testHmr', () => {
 
   describe('yield change({...})', () => {
     hit('triggers app init', function*() {
-      expect(loadPage).not.to.have.been.called
+      expect(mock.loadPage).not.to.have.been.called
       yield change({
         'main.js': 'foo',
       })
-      expect(loadPage).to.have.been.calledOnce
+      expect(mock.loadPage).to.have.been.calledOnce
     })
 
     hit('writes new files and wait for HMR', function*() {
-      expect(writeHmr).not.to.have.been.called
+      expect(mock.writeHmr).not.to.have.been.called
       yield change({
         'main.js': 'foo',
         'App.svelte': 'bar',
       })
-      expect(writeHmr).to.have.been.calledOnce
+      expect(mock.writeHmr).to.have.been.calledOnce
     })
 
     hit('writes new files and wait on each call', function*() {
-      expect(writeHmr).not.to.have.been.called
+      expect(mock.writeHmr).not.to.have.been.called
       yield change({
         'main.js': 'foo',
       })
-      expect(writeHmr).to.have.been.calledOnce
+      expect(mock.writeHmr).to.have.been.calledOnce
       yield change({
         'App.svelte': 'bar',
       })
-      expect(writeHmr).to.have.been.calledTwice
+      expect(mock.writeHmr).to.have.been.calledTwice
     })
   })
 
@@ -1393,30 +1209,36 @@ describe('test utils: testHmr', () => {
     hit('always includes string specs', function*() {
       yield spec({ always: 'ALWAYS' })
       yield change(0)
-      expect(writeHmr).to.have.been.calledWith(_page, { always: 'ALWAYS' })
+      expect(mock.writeHmr).to.have.been.calledWith(mock.page, {
+        always: 'ALWAYS',
+      })
     })
 
     hit('always includes * specs', function*() {
       yield spec({ always: { '*': 'ALWAYS' } })
       yield change(0)
-      expect(writeHmr).to.have.been.calledWith(_page, { always: 'ALWAYS' })
+      expect(mock.writeHmr).to.have.been.calledWith(mock.page, {
+        always: 'ALWAYS',
+      })
       yield change(1)
-      expect(writeHmr).to.have.been.calledWith(_page, { always: 'ALWAYS' })
+      expect(mock.writeHmr).to.have.been.calledWith(mock.page, {
+        always: 'ALWAYS',
+      })
     })
 
     hit('only write files that have a matching condition label', function*() {
       yield spec({ foo: { 0: 'FOO', 1: 'foo' }, bar: { 1: 'BAR', 2: 'bar' } })
       yield change(0)
-      expect(writeHmr).to.have.been.calledWith(_page, {
+      expect(mock.writeHmr).to.have.been.calledWith(mock.page, {
         foo: 'FOO',
       })
       yield change(1)
-      expect(writeHmr).to.have.been.calledWith(_page, {
+      expect(mock.writeHmr).to.have.been.calledWith(mock.page, {
         foo: 'foo',
         bar: 'BAR',
       })
       yield change(2)
-      expect(writeHmr).to.have.been.calledWith(_page, {
+      expect(mock.writeHmr).to.have.been.calledWith(mock.page, {
         bar: 'bar',
       })
     })
@@ -1429,7 +1251,7 @@ describe('test utils: testHmr', () => {
 
     hit('returns the page instance', function*() {
       const p = yield page()
-      expect(p).to.equal(_page)
+      expect(p).to.equal(mock.page)
     })
 
     hit('triggers init', function*() {
@@ -1448,7 +1270,7 @@ describe('test utils: testHmr', () => {
   describe('yield page[method](...args)', () => {
     hit('proxies the method to the actual page instance', function*() {
       yield page.$eval()
-      expect(_page.$eval).to.have.been.calledOnce
+      expect(mock.page.$eval).to.have.been.calledOnce
     })
 
     hit('passes arguments to the proxied method', function*() {
@@ -1456,17 +1278,17 @@ describe('test utils: testHmr', () => {
       const b = {}
       const c = {}
       yield page.$eval(a, b, c)
-      expect(_page.$eval).to.have.been.calledWith(a, b, c)
+      expect(mock.page.$eval).to.have.been.calledWith(a, b, c)
     })
 
     hit('returns proxied method result', function*() {
-      _page.$eval = sinon.fake(() => 'yep')
+      mock.page.$eval = sinon.fake(() => 'yep')
       const result = yield page.$eval()
       expect(result).to.equal('yep')
     })
 
     hit('await async results', function*() {
-      _page.$eval = sinon.fake(async () => '... yep')
+      mock.page.$eval = sinon.fake(async () => '... yep')
       const result = yield page.$eval()
       expect(result).to.equal('... yep')
     })
@@ -1486,12 +1308,12 @@ describe('test utils: testHmr', () => {
     describe('yield page.keyboard()', () => {
       hit('returns the object instance', function*() {
         const keyboard = yield page.keyboard()
-        expect(keyboard).to.equal(_page.keyboard)
+        expect(keyboard).to.equal(mock.page.keyboard)
       })
 
       it('crashes when calling an object instance with arguments', async () => {
-        _page.keyboard = {}
-        const result = _testHmr(function*() {
+        mock.page.keyboard = {}
+        const result = mock.testHmr(function*() {
           yield page.keyboard('boom')
         })
         await expect(result).to.be.rejectedWith('not a function')
@@ -1503,18 +1325,20 @@ describe('test utils: testHmr', () => {
         'proxies the method to the actual page.keyboard instance',
         function*() {
           yield page.keyboard.press('Backspace')
-          expect(_page.keyboard.press).to.have.been.calledOnceWith('Backspace')
+          expect(mock.page.keyboard.press).to.have.been.calledOnceWith(
+            'Backspace'
+          )
         }
       )
     })
   }) // yield page
 
   describe('testHmr`...`', () => {
-    const runTest = wrapper => _testHmr('*under test*', null, null, wrapper)
+    const runTest = wrapper => mock.testHmr('*under test*', null, null, wrapper)
 
     const commons = (runTest, mainTest) => {
       it('can be used as a template literal', async () => {
-        _page.$eval = sinon.fake.returns('foo')
+        mock.page.$eval = sinon.fake.returns('foo')
         await runTest(
           testHmr => testHmr`
             # my spec
@@ -1544,12 +1368,12 @@ describe('test utils: testHmr', () => {
         isRunSpecTagAsDescribe: () => false,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper)
+        mock.testHmr('*under test*', null, customizer, wrapper)
 
-      commons(runTest, () => _it)
+      commons(runTest, () => mock.it)
 
       it('registers single conditions with `it`', async () => {
-        _page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
+        mock.page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
         await runTest(
           testHmr => testHmr`
             # my spec
@@ -1559,8 +1383,8 @@ describe('test utils: testHmr', () => {
             ::0 <h1>I am file</h1>
           `
         )
-        expect(_it, 'it').to.have.been.calledOnceWith('my spec')
-        expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
+        expect(mock.it, 'it').to.have.been.calledOnceWith('my spec')
+        expect(mock.page.$eval, 'page.$eval').to.have.been.calledOnce
       })
 
       it('reports errors as test failure', async () => {
@@ -1574,11 +1398,11 @@ describe('test utils: testHmr', () => {
           `
         )
         await expect(promise, 'runTest').to.be.rejected
-        expect(_it).to.have.been.calledOnce
+        expect(mock.it).to.have.been.calledOnce
         // use `it` return value instead of runTest result, to ensure that
         // the error really did pass through the test handler (as opposed to
         // some kind of possible test artifact)
-        expect(await _it.returnValues[0])
+        expect(await mock.it.returnValues[0])
           .to.have.nested.property('error.message')
           .that.include('expected')
       })
@@ -1591,12 +1415,12 @@ describe('test utils: testHmr', () => {
         isDescribeByStep: () => true,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper)
+        mock.testHmr('*under test*', null, customizer, wrapper)
 
-      commons(runTest, () => _describe)
+      commons(runTest, () => mock.describe)
 
       it('runs conditions with `describe`', async () => {
-        _page.$eval.return('<h1>I am file</h1>', '<h1>I am still</h1>')
+        mock.page.$eval.return('<h1>I am file</h1>', '<h1>I am still</h1>')
         await runTest(
           testHmr => testHmr`
             # my spec
@@ -1607,16 +1431,16 @@ describe('test utils: testHmr', () => {
             ::1 <h1>I am still</h1>
           `
         )
-        expect(_describe, 'describe')
+        expect(mock.describe, 'describe')
           .to.have.been.calledThrice //
           .and.calledWith('my spec')
           .and.calledWith('after update 0')
           .and.calledWith('after update 1')
-        expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+        expect(mock.page.$eval, 'page.$eval').to.have.been.calledTwice
       })
 
       it('runs steps with `it`', async () => {
-        _page.$eval.return('<h1>I am file</h1>', '<h2>I am still</h2>')
+        mock.page.$eval.return('<h1>I am file</h1>', '<h2>I am still</h2>')
         await runTest(
           testHmr => testHmr`
             # my spec
@@ -1629,23 +1453,23 @@ describe('test utils: testHmr', () => {
               <h2>I am still</h2>
           `
         )
-        expect(_describe, 'describe')
+        expect(mock.describe, 'describe')
           .to.have.been.calledTwice //
           .and.calledWith('my spec')
           .and.calledWith('after update 0 (initial initialisation)')
-        expect(_it, 'it')
+        expect(mock.it, 'it')
           .to.have.been.calledThrice //
           .and.calledWith('step 0 (html)')
           .and.calledWith('step 1 (sub)')
           .and.calledWith('step 2 (html)')
-        expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+        expect(mock.page.$eval, 'page.$eval').to.have.been.calledTwice
       })
 
       it('marks failed `it` steps as failure and skip subsequent steps', async () => {
         function* sub() {
           throw new Error('oops')
         }
-        _page.$eval = sinon.fake.returns('I am file')
+        mock.page.$eval = sinon.fake.returns('I am file')
         const result = runTest(
           testHmr => testHmr`
             # my spec
@@ -1664,13 +1488,13 @@ describe('test utils: testHmr', () => {
           `
         )
         await expect(result).to.be.rejected
-        expect(_describe.args, 'describe args').to.matchPattern([
+        expect(mock.describe.args, 'describe args').to.matchPattern([
           ['my spec', {}],
           ['after update 0 (init)', {}],
           ['after update 1 (crashes)', {}],
           ['after update 2 (skipped)', {}],
         ])
-        expect(_it.args, 'it args').to.matchPattern([
+        expect(mock.it.args, 'it args').to.matchPattern([
           ['step 0 (html)', {}],
           ['step 0 (html)', {}],
           ['step 1 (sub)', {}],
@@ -1681,7 +1505,7 @@ describe('test utils: testHmr', () => {
         // use `it` return value instead of runTest result, to ensure that
         // the error really did pass through the test handler (as opposed to
         // some kind of possible test artifact)
-        const results = await Promise.all(_it.returnValues)
+        const results = await Promise.all(mock.it.returnValues)
         expect(results, 'it return values').to.matchPattern([
           // 0-0 (html)
           { error: undefined, skipped: false },
@@ -1709,12 +1533,12 @@ describe('test utils: testHmr', () => {
         isDescribeByStep: () => false,
       })
       const runTest = wrapper =>
-        _testHmr('*under test*', null, customizer, wrapper)
+        mock.testHmr('*under test*', null, customizer, wrapper)
 
-      commons(runTest, () => _describe)
+      commons(runTest, () => mock.describe)
 
       it('registers single conditions with `it`', async () => {
-        _page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
+        mock.page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
         await runTest(
           testHmr => testHmr`
             # my spec
@@ -1724,12 +1548,12 @@ describe('test utils: testHmr', () => {
             ::0 <h1>I am file</h1>
           `
         )
-        expect(_it, 'it').to.have.been.calledOnceWith('my spec')
-        expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
+        expect(mock.it, 'it').to.have.been.calledOnceWith('my spec')
+        expect(mock.page.$eval, 'page.$eval').to.have.been.calledOnce
       })
 
       it('runs conditions with `it`', async () => {
-        _page.$eval.return('<h1>I am file</h1>', '<h1>I am still</h1>')
+        mock.page.$eval.return('<h1>I am file</h1>', '<h1>I am still</h1>')
         await runTest(
           testHmr => testHmr`
             # my spec
@@ -1740,19 +1564,19 @@ describe('test utils: testHmr', () => {
             ::1 <h1>I am still</h1>
           `
         )
-        expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
-        expect(_it, 'it')
+        expect(mock.describe, 'describe').to.have.been.calledOnceWith('my spec')
+        expect(mock.it, 'it')
           .to.have.been.calledTwice //
           .and.calledWith('after update 0')
           .and.calledWith('after update 1')
-        expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+        expect(mock.page.$eval, 'page.$eval').to.have.been.calledTwice
       })
 
       it('marks failed `it` cases as failure and skip subsequent cases', async () => {
         function* sub() {
           throw new Error('oops')
         }
-        _page.$eval = sinon.fake.returns('I am file')
+        mock.page.$eval = sinon.fake.returns('I am file')
         const result = runTest(
           testHmr => testHmr`
             # my spec
@@ -1769,8 +1593,8 @@ describe('test utils: testHmr', () => {
           `
         )
         await expect(result).to.be.rejected
-        expect(_describe, 'describe').to.have.been.calledOnceWith('my spec')
-        expect(_it, 'it')
+        expect(mock.describe, 'describe').to.have.been.calledOnceWith('my spec')
+        expect(mock.it, 'it')
           .to.have.been.calledThrice //
           .and.calledWith('after update 0 (init)')
           .and.calledWith('after update 1 (crashes)')
@@ -1778,7 +1602,7 @@ describe('test utils: testHmr', () => {
         // use `it` return value instead of runTest result, to ensure that
         // the error really did pass through the test handler (as opposed to
         // some kind of possible test artifact)
-        const results = await Promise.all(_it.returnValues)
+        const results = await Promise.all(mock.it.returnValues)
         // console.log(results)
         expect(results, 'it return values').to.matchPattern([
           {
@@ -1810,7 +1634,7 @@ describe('test utils: testHmr', () => {
     })
 
     it('runs simple assertions', async () => {
-      _page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
+      mock.page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
       await runTest(
         testHmr => testHmr`
           # my spec
@@ -1820,7 +1644,7 @@ describe('test utils: testHmr', () => {
           ::0 <h1>I am file</h1>
         `
       )
-      expect(_page.$eval, 'page.$eval').to.have.been.calledOnce
+      expect(mock.page.$eval, 'page.$eval').to.have.been.calledOnce
     })
 
     it('runs assertion steps', async () => {
@@ -1831,7 +1655,7 @@ describe('test utils: testHmr', () => {
           1: '<h2>I am step2</h2>',
         }
         let i = 0
-        _page.$eval = sinon.fake(async () => results[i++])
+        mock.page.$eval = sinon.fake(async () => results[i++])
       }
       await runTest(
         testHmr => testHmr`
@@ -1846,14 +1670,14 @@ describe('test utils: testHmr', () => {
           ::
         `
       )
-      expect(_page.$eval, 'page.$eval').to.have.been.calledTwice
+      expect(mock.page.$eval, 'page.$eval').to.have.been.calledTwice
       expect(sub, 'sub').to.have.been.calledOnce
     })
 
     it('regiters first HMR case (cond) as init file set', async () => {
       const sub = sinon.fake(ensureInit)
 
-      _page.$eval = sinon.fake.returns('i am phil')
+      mock.page.$eval = sinon.fake.returns('i am phil')
 
       await runTest(
         testHmr => testHmr`
