@@ -332,6 +332,36 @@ describe('command: spec.expect', () => {
       })
       expect(mock.page.$eval).to.have.been.calledOnce
     })
+
+    hit('matches ^ regexes', function*() {
+      mock.page.$eval.return('I AM CAPITAL')
+      yield spec.expect(0, ['I', /^am/i, 'CAPITAL'])
+    })
+
+    hit('matches ^ regexes with no space', function*() {
+      mock.page.$eval.return('IAM CAPITAL')
+      yield spec.expect(0, ['I', /^am/i, 'CAPITAL'])
+    })
+
+    hit('matches ^ regexes with lot of space', function*() {
+      mock.page.$eval.return('   I   AM  CAPITAL   ')
+      yield spec.expect(0, ['I', /^am/i, 'CAPITAL'])
+    })
+
+    hit('matches unanchored regexes', function*() {
+      mock.page.$eval.return('I <AM a bad tag> CAPITAL')
+      yield spec.expect(0, ['I', /[^>]>/i, 'CAPITAL'])
+    })
+
+    hit('matches unanchored regexes with no space', function*() {
+      mock.page.$eval.return('I<AM a bad tag>CAPITAL')
+      yield spec.expect(0, ['I', /[^>]>/i, 'CAPITAL'])
+    })
+
+    hit('matches unanchored regexes with lot of space', function*() {
+      mock.page.$eval.return('I<AM a bad tag>CAPITAL')
+      yield spec.expect(0, ['I', /[^>]>/i, 'CAPITAL'])
+    })
   })
 
   describe('yield spec.expect(int, string)', () => {
@@ -444,6 +474,48 @@ describe('command: spec.expect', () => {
       yield spec.expect(0, `<h2>Kild: I am expected</h2>`)
       yield spec.expect(1, `<h1>I am Kild</h1>`)
       yield spec.expect(2, `<h1>I am Kild</h1> <p>oooO   oOoo</p>`)
+    })
+
+    hit('accepts regexes in arrays', function*() {
+      yield spec.expect(0, ['I', /am/, 'expected'])
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        expects: new Map([
+          [
+            '0',
+            {
+              steps: [
+                {
+                  html: ['I', '/am/', 'expected'],
+                },
+              ],
+            },
+          ],
+        ]),
+      })
+      expect(state.expects.get('0').steps[0].html[1]).to.be.instanceOf(RegExp)
+      yield spec.$$discard()
+    })
+
+    hit('accepts regexes', function*() {
+      yield spec.expect(0, /am/)
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        expects: new Map([
+          [
+            '0',
+            {
+              steps: [
+                {
+                  html: ['/am/'],
+                },
+              ],
+            },
+          ],
+        ]),
+      })
+      expect(state.expects.get('0').steps[0].html[0]).to.be.instanceOf(RegExp)
+      yield spec.$$discard()
     })
   }) // yield spec.expect(int, string)
 })

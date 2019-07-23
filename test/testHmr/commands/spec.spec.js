@@ -540,9 +540,223 @@ describe('command: spec', () => {
       expect(state.beforeLoad, 'state.beforeLoad').to.equal(sub)
     })
 
+    hit('parses regex outside of conditions', function*() {
+      yield spec`
+        ****
+        before
+        ${/^i am/i}
+        aft
+        ::0::
+          in
+        ::
+      `
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        expects: new Map([
+          [
+            '0',
+            {
+              steps: [
+                {
+                  html: ['before', '/^i am/i', 'aft', 'in'],
+                },
+              ],
+            },
+          ],
+        ]),
+      })
+      expect(state.expects.get('0').steps[0].html[1]).to.be.instanceOf(RegExp)
+      yield spec.$$discard()
+    })
+
+    hit('parses regex in inline conditions', function*() {
+      yield spec`
+        ****
+        before
+        ::0 I ${/^AM/i} expected
+      `
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        expects: new Map([
+          [
+            '0',
+            {
+              steps: [
+                {
+                  html: ['before', 'I', '/^AM/i', 'expected'],
+                },
+              ],
+            },
+          ],
+        ]),
+      })
+      expect(state.expects.get('0').steps[0].html[2]).to.be.instanceOf(RegExp)
+      yield spec.$$discard()
+    })
+
+    hit('parses multiple regexes in inline conditions', function*() {
+      yield spec`
+        ****
+        before
+        ::0 I ${/^AM/i} expected ${/for$/} dinner ${/^[.]/}
+      `
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        expects: new Map([
+          [
+            '0',
+            {
+              steps: [
+                {
+                  html: [
+                    'before',
+                    'I',
+                    '/^AM/i',
+                    'expected',
+                    '/for$/',
+                    'dinner',
+                    '/^[.]/',
+                  ],
+                },
+              ],
+            },
+          ],
+        ]),
+      })
+      yield spec.$$discard()
+    })
+
+    hit(
+      'parses initial regex in inline conditions with multiple regexes',
+      function*() {
+        yield spec`
+          ****
+          before
+          ::0 ${/^AM/i} I expected ${/for$/}
+        `
+        const state = yield $$debug()
+        expect(state).to.matchPattern({
+          expects: new Map([
+            [
+              '0',
+              {
+                steps: [
+                  {
+                    html: ['before', '/^AM/i', 'I expected', '/for$/'],
+                  },
+                ],
+              },
+            ],
+          ]),
+        })
+        yield spec.$$discard()
+      }
+    )
+
+    hit('parses regex inside block conditions', function*() {
+      yield spec`
+        ****
+        before
+        ::0::
+          I ${/^AM/i} expected
+        ::
+      `
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        expects: new Map([
+          [
+            '0',
+            {
+              steps: [
+                {
+                  html: ['before', 'I', '/^AM/i', 'expected'],
+                },
+              ],
+            },
+          ],
+        ]),
+      })
+      expect(state.expects.get('0').steps[0].html[2]).to.be.instanceOf(RegExp)
+      yield spec.$$discard()
+    })
+
+    hit('parses multiple regexes inside block conditions', function*() {
+      yield spec`
+        ****
+        before
+        ::0::
+          I ${/^AM/i} expected ${/for/} dinner
+        ::
+      `
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        expects: new Map([
+          [
+            '0',
+            {
+              steps: [
+                {
+                  html: [
+                    'before',
+                    'I',
+                    '/^AM/i',
+                    'expected',
+                    '/for/',
+                    'dinner',
+                  ],
+                },
+              ],
+            },
+          ],
+        ]),
+      })
+      yield spec.$$discard()
+    })
+
+    hit('parses mixed subs & regexes in block conditions', function*() {
+      function* sub() {}
+      yield spec`
+        ****
+        before
+        ::0::
+          I ${/^AM/i} expected ${/for/} dinner
+          ${sub}
+          A${/re|m/i}n't ${/i/i}?
+        ::
+      `
+      const state = yield $$debug()
+      expect(state).to.matchPattern({
+        expects: new Map([
+          [
+            '0',
+            {
+              steps: [
+                {
+                  html: [
+                    'before',
+                    'I',
+                    '/^AM/i',
+                    'expected',
+                    '/for/',
+                    'dinner',
+                  ],
+                },
+                { sub },
+                {
+                  html: ['before', 'A', '/re|m/i', "n't", '/i/i', '?'],
+                },
+              ],
+            },
+          ],
+        ]),
+      })
+      yield spec.$$discard()
+    })
+
     // kitchen sink
     hit('lets mix all styles for maximum expressivity', function*() {
-      yield spec(`
+      const sub = function*() {}
+      yield spec`
         ---- foo.js ----
         top
         ::0 on 000
@@ -557,7 +771,12 @@ describe('command: spec', () => {
         <h1>Result...</h1>
         ::0
         ::1 <p>has arrived!</p>
-      `)
+        ::2 ${/I/} am ${/regular/}
+        ::finally::
+          ${/any/} other
+          ${sub}
+          to ${/the*/} bitter ${/end/}
+      `
 
       const state = yield $$debug()
       expect(state).to.matchPattern({
@@ -584,6 +803,34 @@ describe('command: spec', () => {
         expects: new Map([
           ['0', { steps: [{ html: '<h1>Result...</h1>' }] }],
           ['1', { steps: [{ html: '<h1>Result...</h1><p>has arrived!</p>' }] }],
+          [
+            '2',
+            {
+              steps: [
+                {
+                  html: ['<h1>Result...</h1>', '/I/', 'am', '/regular/'],
+                },
+              ],
+            },
+          ],
+          [
+            'finally',
+            {
+              steps: [
+                { html: ['<h1>Result...</h1>', '/any/', 'other'] },
+                { sub },
+                {
+                  html: [
+                    '<h1>Result...</h1>',
+                    'to',
+                    '/the*/',
+                    'bitter',
+                    '/end/',
+                  ],
+                },
+              ],
+            },
+          ],
         ]),
       })
 
