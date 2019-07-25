@@ -330,7 +330,7 @@ describe('command: spec.expect', () => {
           expects: new Map([['0', { steps: [{ html: _`` }] }]]),
         })
       })
-      expect(mock.page.$eval).to.have.been.calledOnce
+      expect(mock.page.$eval).to.have.been.called
     })
 
     hit('matches ^ regexes', function*() {
