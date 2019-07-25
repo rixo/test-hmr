@@ -507,6 +507,7 @@ describe('command: spec', () => {
           },
         },
       })
+      yield spec.$$discard()
     })
 
     hit('parses empty condition lines in expects', function*() {
@@ -538,6 +539,7 @@ describe('command: spec', () => {
       `
       const state = yield $$debug()
       expect(state.beforeLoad, 'state.beforeLoad').to.equal(sub)
+      yield spec.$$discard()
     })
 
     hit('parses regex outside of conditions', function*() {
