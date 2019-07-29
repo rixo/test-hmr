@@ -1,5 +1,7 @@
-const { parse } = require('../lib/hmr-spec/hmr-spec-parser')
+const dedent = require('dedent')
 const escapeRegExp = require('lodash.escaperegexp')
+
+const { parse } = require('../lib/hmr-spec/hmr-spec-parser')
 
 const parseSpec = (source, ...options) =>
   parse(source, {
@@ -853,6 +855,31 @@ describe('hmr spec parser.parse', () => {
       )
     }) // {block}
   }) // conditions
+
+  describe('prolog', () => {
+    it('parses prolog', () => {
+      const ast = parseFullSpec(dedent`
+        # My Title
+
+        ---- my.file ----
+      `)
+      expect(ast.prolog).to.deep.equal({
+        start: 11,
+        end: 12,
+      })
+    })
+
+    it('parses prolog', () => {
+      const ast = parseFullSpec(dedent`
+        # My Title
+        ---- my.file ----
+      `)
+      expect(ast.prolog).to.deep.equal({
+        start: 11,
+        end: 11,
+      })
+    })
+  })
 
   describe('full spec', () => {
     it('accepts a title', () => {

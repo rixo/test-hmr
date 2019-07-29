@@ -529,7 +529,7 @@ describe('command: spec', () => {
       yield spec.$$discard()
     })
 
-    hit('parses beforeLoad hook', function*() {
+    hit('parses beforeLoad hook in expected result', function*() {
       const sub = function*() {}
       yield spec`
         --- file.php ---
@@ -538,7 +538,26 @@ describe('command: spec', () => {
         ::0
       `
       const state = yield $$debug()
-      expect(state.beforeLoad, 'state.beforeLoad').to.equal(sub)
+      expect(state.beforeLoad, 'state.beforeLoad')
+        .to.be.an('array')
+        .of.length(1)
+        .and.to.have.members([sub])
+      yield spec.$$discard()
+    })
+
+    hit('parses beforeLoad hook before file specs', function*() {
+      const sub = function*() {}
+      yield spec`
+        ${sub}
+        --- file.php ---
+        * * *
+        ::0
+      `
+      const state = yield $$debug()
+      expect(state.beforeLoad, 'state.beforeLoad')
+        .to.be.an('array')
+        .of.length(1)
+        .and.to.have.members([sub])
       yield spec.$$discard()
     })
 
