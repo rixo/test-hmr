@@ -69,8 +69,9 @@ const setup = () => {
       })
   )
 
-  mock.testHmr = (title, handler, customizer, executer) =>
+  mock.testHmr = (...args) =>
     new Promise((resolve, reject) => {
+      const [title, handler, customizer, executer] = args
       let rootPromises
       let previousItPromise
 
@@ -185,6 +186,9 @@ const setup = () => {
         return executer(testHmr)
       } else if (typeof title === 'function') {
         return testHmr(null, title)
+      } else if (Array.isArray(title)) {
+        const [strings, ...values] = args
+        return testHmr(strings, ...values)
       } else {
         return testHmr(title, handler)
       }
