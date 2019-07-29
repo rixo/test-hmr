@@ -30,7 +30,7 @@ describe('test utils: testHmr', () => {
     expect(mock.writeHmr).not.to.have.been.called
   })
 
-  describe('yield debug()', () => {
+  describe('yield $$debug()', () => {
     hit('returns current HMR test state', function*() {
       const state = yield $$debug()
       expect(state).not.to.be.undefined
