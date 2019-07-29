@@ -354,27 +354,23 @@ describe('test utils: testHmr', () => {
     })
 
     it('throws on missing title', async () => {
-      const result = runTest(
-        testHmr => testHmr`
-          ---- just-a-file ----
-          * * *
-          ::0
-        `
-      )
+      const result = mock.testHmr`
+        ---- just-a-file ----
+        * * *
+        ::0
+      `
       await expect(result).to.be.rejectedWith('Expected title')
     })
 
     it('runs simple assertions', async () => {
       mock.page.$eval = sinon.fake(async () => '<h1>I am file</h1>')
-      await runTest(
-        testHmr => testHmr`
-          # my spec
-          ---- my-file ----
-          <h1>I am file</h1>
-          ****
-          ::0 <h1>I am file</h1>
-        `
-      )
+      await mock.testHmr`
+        # my spec
+        ---- my-file ----
+        <h1>I am file</h1>
+        ****
+        ::0 <h1>I am file</h1>
+      `
       expect(mock.page.$eval, 'page.$eval').to.have.been.calledOnce
     })
 
@@ -388,19 +384,17 @@ describe('test utils: testHmr', () => {
         let i = 0
         mock.page.$eval = sinon.fake(async () => results[i++])
       }
-      await runTest(
-        testHmr => testHmr`
-          # my spec
-          ---- my-file ----
+      await mock.testHmr`
+        # my spec
+        ---- my-file ----
+        <h1>I am file</h1>
+        ****
+        ::0::
           <h1>I am file</h1>
-          ****
-          ::0::
-            <h1>I am file</h1>
-            ${sub}
-            <h2>I am step2</h2>
-          ::
-        `
-      )
+          ${sub}
+          <h2>I am step2</h2>
+        ::
+      `
       expect(mock.page.$eval, 'page.$eval').to.have.been.calledTwice
       expect(sub, 'sub').to.have.been.calledOnce
     })
@@ -410,19 +404,17 @@ describe('test utils: testHmr', () => {
 
       mock.page.$eval = sinon.fake.returns('i am phil')
 
-      await runTest(
-        testHmr => testHmr`
-          # my spec
-          ---- my-file ----
+      await mock.testHmr`
+        # my spec
+        ---- my-file ----
+        i am phil
+        ****
+        ::0::
           i am phil
-          ****
-          ::0::
-            i am phil
-            ${sub}
-            i am phil
-          ::
-        `
-      )
+          ${sub}
+          i am phil
+        ::
+      `
 
       function* ensureInit() {
         const state = yield $$debug()
