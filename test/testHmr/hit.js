@@ -32,6 +32,7 @@ const setup = () => {
     describe: null,
     reset: sinon.fake(),
     writeHmr: sinon.fake(async () => {}),
+    customizer: null,
   }
 
   mock.page = {
@@ -71,7 +72,6 @@ const setup = () => {
 
   mock.testHmr = (...args) =>
     new Promise((resolve, reject) => {
-      const [title, handler, customizer, executer] = args
       let rootPromises
       let previousItPromise
 
@@ -178,14 +178,19 @@ const setup = () => {
         loadPage: mock.loadPage,
         appHtmlPrefix: '',
       }
+      const isShortcut = typeof args[0] === 'function'
+      const [title, handler, customizer, executer] = isShortcut
+        ? [null, ...args]
+        : args
+      if (mock.customizer) {
+        options = mock.customizer(options)
+      }
       if (customizer) {
         options = customizer(options)
       }
       const testHmr = createTestHmr(options)
       if (executer) {
         return executer(testHmr)
-      } else if (typeof title === 'function') {
-        return testHmr(null, title)
       } else if (Array.isArray(title)) {
         const [strings, ...values] = args
         return testHmr(strings, ...values)
@@ -202,6 +207,14 @@ hit.beforeEach = onBeforeEach => {
       onBeforeEach(mock)
     }
   })
+}
+
+hit.customizer = {
+  // eslint-disable-next-line no-unused-vars
+  browser: opts => ({ reset, writeHmr, loadPage, ...rest }) => ({
+    ...rest,
+    ...opts,
+  }),
 }
 
 module.exports = hit
