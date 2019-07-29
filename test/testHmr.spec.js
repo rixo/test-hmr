@@ -65,8 +65,6 @@ describe('test utils: testHmr', () => {
   })
 
   describe('testHmr`...`', () => {
-    const runTest = wrapper => mock.testHmr('*under test*', null, null, wrapper)
-
     const commons = (runTest, mainTest) => {
       it('can be used as a template literal', async () => {
         mock.page.$eval = sinon.fake.returns('foo')
@@ -424,6 +422,31 @@ describe('test utils: testHmr', () => {
       }
 
       expect(sub, 'ensureInit').to.have.been.calledOnce
+    })
+
+    describe('when there are no explicit conditions in expected result', () => {
+      beforeEach(() => {
+        mock.page.$eval.return('contains example')
+      })
+
+      it('runs the whole expected string as label ::0', async () => {
+        await mock.testHmr`
+          # test
+          * * *
+          contains example
+        `
+        expect(mock.page.$eval).to.have.been.called
+      })
+
+      it('fails the test if string does no match', async () => {
+        const result = mock.testHmr`
+          # test
+          * * *
+          contains examplo
+        `
+        await expect(result).to.be.rejectedWith('examplo')
+        expect(mock.page.$eval).to.have.been.called
+      })
     })
   })
 })
