@@ -1,13 +1,6 @@
 const hit = require('./testHmr/hit')
 
-const {
-  templates,
-  init,
-  $$debug,
-  innerText,
-  page,
-  beforeLoad,
-} = require('../lib/testHmr')
+const { templates, init, $$debug, innerText } = require('../lib/testHmr')
 
 describe('test utils: testHmr', () => {
   let mock
@@ -35,33 +28,6 @@ describe('test utils: testHmr', () => {
       const state = yield $$debug()
       expect(state).not.to.be.undefined
     })
-  })
-
-  describe('yield beforeLoad(fn*)', () => {
-    it('is a command function', () => {
-      expect(beforeLoad).to.be.a('function')
-    })
-
-    hit('is exposed as this.beforeLoad', function*() {
-      expect(this.beforeLoad).to.equal(beforeLoad)
-    })
-
-    hit('registers a beforeLoad hook sub', registersSub)
-
-    describeE2e('e2e', () => {
-      hit.browser('registers a beforeLoad hook sub', registersSub)
-    })
-
-    function* registersSub() {
-      let pp
-      const sub = sinon.fake(function*() {
-        pp = yield page()
-      })
-      yield beforeLoad(sub)
-      const p = yield page()
-      expect(sub, 'beforeLoad').to.have.been.calledOnce
-      expect(pp, 'yield page from beforeLoad').to.equal(p)
-    }
   })
 
   describe('testHmr`...`', () => {
