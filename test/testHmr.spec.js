@@ -30,6 +30,49 @@ describe('test utils: testHmr', () => {
     })
   })
 
+  describe('test scope', () => {
+    it('uses same scope for all sub / generator handlers', async () => {
+      mock.page.$eval = sinon.fake.returns('text')
+
+      const fakeSub = sinon.fake()
+      const myInit = {}
+      let me
+
+      // const expectScope = sinon.fake()
+      function* expectScope(...args) {
+        fakeSub(...args) // tracks calls for us
+        expect(this, 'this').to.equal(me)
+        expect(this.init, 'this.init').to.equal(myInit)
+      }
+
+      const result = mock.testHmr`
+        # mock test
+        ${function*() {
+          me = this
+          // NOTE we intentionnaly replace an existing command
+          this.init = myInit
+        }}
+        --- App.svelte ---
+        ::0 text
+        ::1
+        * * * * * * * * *
+        ${expectScope}
+        ::0 ${expectScope}
+        ::0::
+          ${expectScope}
+          text
+          ${expectScope}
+        ::1::
+          ${expectScope}
+          text
+          ${expectScope}
+      `
+
+      await expect(result).to.be.fulfilled
+      expect(fakeSub, 'expectScope').to.have.callCount(6)
+    })
+  })
+
   describe('testHmr`...`', () => {
     const commons = (runTest, mainTest) => {
       it('can be used as a template literal', async () => {
