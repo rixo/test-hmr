@@ -178,24 +178,27 @@ const setup = () => {
         loadPage: mock.loadPage,
         appHtmlPrefix: '',
       }
-      const isShortcut = typeof args[0] === 'function'
-      const [title, handler, customizer, executer] = isShortcut
-        ? [null, ...args]
-        : args
       if (mock.customizer) {
         options = mock.customizer(options)
       }
-      if (customizer) {
-        options = customizer(options)
-      }
-      const testHmr = createTestHmr(options)
-      if (executer) {
-        return executer(testHmr)
-      } else if (Array.isArray(title)) {
+      if (Array.isArray(args[0])) {
         const [strings, ...values] = args
+        const testHmr = createTestHmr(options)
         return testHmr(strings, ...values)
       } else {
-        return testHmr(title, handler)
+        const isShortcut = typeof args[0] === 'function'
+        const [title, handler, customizer, executer] = isShortcut
+          ? [null, ...args]
+          : args
+        if (customizer) {
+          options = customizer(options)
+        }
+        const testHmr = createTestHmr(options)
+        if (executer) {
+          return executer(testHmr)
+        } else {
+          return testHmr(title, handler)
+        }
       }
     })
 }
