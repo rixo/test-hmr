@@ -1,6 +1,6 @@
 {
   "name": "test-hmr",
-  "version": "0.0.2",
+  "version": "0.0.3-0",
   "description": "Testbed for webpack HMR",
   "keywords": "webpack hmr test",
   "main": "index.js",
@@ -16,8 +16,8 @@
   "author": "rixo <rixo@rixo.fr>",
   "license": "MIT",
   "peerDependencies": {
-    "webpack": ">=4.0.0",
     "nollup": "^0.7.4",
+    "webpack": ">=4.0.0",
     "webpack-dev-server": ">=3.0.0"
   },
   "dependencies": {
