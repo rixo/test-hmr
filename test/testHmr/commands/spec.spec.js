@@ -51,7 +51,7 @@ describe('command: spec', () => {
       const state = yield $$debug()
       expect(state.specs).to.matchPattern({
         file: {
-          '*': _`contents part`,
+          '0': _([`contents part`]),
         },
       })
     })
@@ -64,7 +64,7 @@ describe('command: spec', () => {
       expect(yield $$debug()).to.matchPattern({
         specs: {
           ether: {
-            '*': _`I just am`,
+            '0': _([`I just am`]),
           },
         },
       })
@@ -80,10 +80,10 @@ describe('command: spec', () => {
       expect(yield $$debug()).to.matchPattern({
         specs: {
           first: {
-            '*': _`I am just above`,
+            '0': _([`I am just above`]),
           },
           second: {
-            '*': _`I am just bellow`,
+            '0': _([`I am just bellow`]),
           },
         },
       })
@@ -101,10 +101,10 @@ describe('command: spec', () => {
       expect(yield $$debug()).to.matchPattern({
         specs: {
           first: {
-            '*': _`I am just above`,
+            '0': _([`I am just above`]),
           },
           second: {
-            '*': _`I am just bellow`,
+            '0': _([`I am just bellow`]),
           },
         },
       })
@@ -148,7 +148,7 @@ describe('command: spec', () => {
       expect(yield $$debug()).to.matchPattern({
         specs: {
           first: {
-            '*': _`I am just above.`,
+            '0': _([`I am just above.`]),
           },
           'foo.js': {
             '*': undefined,
@@ -161,14 +161,16 @@ describe('command: spec', () => {
             ]),
           },
           second: {
-            '*': _`I am just bellow.`,
+            '0': _([`I am just bellow.`]),
           },
         },
       })
     })
 
-    hit('only parses * for files that have zero condition cases', function*() {
-      yield spec(`
+    hit(
+      "don't parses * for files that have zero or more condition cases",
+      function*() {
+        yield spec(`
         ---- foo ----
         ::0 f00
         ::1 f11
@@ -178,24 +180,26 @@ describe('command: spec', () => {
         ---- baz ----
         I am baz
       `)
-      expect(yield $$debug()).to.matchPattern({
-        specs: {
-          foo: {
-            '*': undefined,
-            '0': _`f00`,
-            '1': _`f11`,
+        expect(yield $$debug()).to.matchPattern({
+          specs: {
+            foo: {
+              '*': undefined,
+              '0': _`f00`,
+              '1': _`f11`,
+            },
+            bar: {
+              '*': undefined,
+              '1': _`b00`,
+              '2': _`b22`,
+            },
+            baz: {
+              '*': undefined,
+              '0': _([`I am baz`]),
+            },
           },
-          bar: {
-            '*': undefined,
-            '1': _`b00`,
-            '2': _`b22`,
-          },
-          baz: {
-            '*': _`I am baz`,
-          },
-        },
-      })
-    })
+        })
+      }
+    )
 
     hit('parses expectations', function*() {
       yield spec(`
@@ -212,7 +216,7 @@ describe('command: spec', () => {
       expect(yield $$debug()).to.matchPattern({
         specs: {
           file: {
-            '*': _`lorem ipsum`,
+            '0': _([`lorem ipsum`]),
           },
         },
         expects: new Map([
@@ -521,7 +525,7 @@ describe('command: spec', () => {
       expect(state).to.matchPattern({
         specs: {
           'file.js': {
-            '*': _``,
+            '0': _([``]),
           },
         },
         expects: new Map([['0', { steps: [{ html: _`` }] }]]),
@@ -815,7 +819,7 @@ describe('command: spec', () => {
             ]),
           },
           'Bar.svelte': {
-            '*': _`<h1>I am Bar</h1>`,
+            '0': _([`<h1>I am Bar</h1>`]),
           },
         },
 
