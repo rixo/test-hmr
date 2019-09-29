@@ -130,6 +130,25 @@ describe('hmr spec parser.parse', () => {
       )
     })
 
+    describe('no conditions', () => {
+      testParse(
+        `
+          ---- file.txt ----
+          c-c-c-contents
+        `,
+        {
+          files: [
+            {
+              path: 'file.txt',
+              content: {
+                conditions: [],
+              },
+            },
+          ],
+        }
+      )
+    })
+
     describe('single line conditions', () => {
       testParse(
         `
