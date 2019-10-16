@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@rixo/eslint-config": "^0.7.0-alpha.7",
+    "esm": "^3.2.25",
     "pegjs": "^0.10.0"
   }
 }
