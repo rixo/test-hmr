@@ -103,4 +103,6 @@ describe('command: cons', () => {
 
   ignoreSuite('ignoreWarnings')
   ignoreSuite('ignoreErrors')
+
+  describe.skip('cons.wait')
 })
