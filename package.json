@@ -1,6 +1,6 @@
 {
   "name": "test-hmr",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Testbed for webpack HMR",
   "keywords": "webpack hmr test",
   "main": "index.js",
