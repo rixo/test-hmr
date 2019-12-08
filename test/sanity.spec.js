@@ -18,7 +18,7 @@ describeE2e('test utils: sanity check', () => {
     })
   }
 
-  describe('remote control', () => {
+  describe.skip('remote control', () => {
     beforeEach(reset)
 
     it(
