@@ -10,8 +10,9 @@ export const goto = url => async ({ page }) => {
   await page.goto(targetUrl)
 }
 
-export const gotoState = url => ({ page }) =>
+export const gotoState = url => async ({ page }) => {
   // eslint-disable-next-line no-undef
-  page.evaluate(url => window.history.pushState({}, '', url), url)
+  await page.evaluate(url => window.history.pushState({}, '', url), url)
+}
 
 goto.push = gotoState
