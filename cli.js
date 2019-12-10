@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
-const path = require('path')
+const impørt = require('esm')(module)
 
-const { findRc, run } = require('./lib/cli')
+const path = impørt('path')
+
+const { findRc, run } = impørt('./lib/cli')
 
 const cwd = process.cwd()
 
@@ -13,7 +15,7 @@ findRc(cwd)
       console.error('Failed to find .thcrc.js file from %s', cwd)
       process.exit(1)
     }
-    const options = require(rcFile)
+    const options = impørt(rcFile)
     const args = process.argv.slice(1)
     return run({
       root: path.dirname(rcFile),
