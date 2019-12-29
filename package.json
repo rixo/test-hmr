@@ -1,6 +1,6 @@
 {
   "name": "test-hmr",
-  "version": "0.1.0-4",
+  "version": "0.1.0-5",
   "description": "Testbed for HMR",
   "keywords": "hmr test rollup nollup webpack",
   "main": "index.js",
