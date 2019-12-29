@@ -1,8 +1,8 @@
 {
   "name": "test-hmr",
   "version": "0.1.0-4",
-  "description": "Testbed for webpack HMR",
-  "keywords": "webpack hmr test",
+  "description": "Testbed for HMR",
+  "keywords": "hmr test rollup nollup webpack",
   "main": "index.js",
   "bin": {
     "thc": "./cli.js"
