@@ -18,3 +18,8 @@ export const gotoState = url => async ({ page }) => {
 }
 
 goto.push = gotoState
+
+export const breakpoint = () => async ({ page }) => {
+  const code = '// You are here because of breakpoint command\ndebugger'
+  await page.evaluate(code)
+}
