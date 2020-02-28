@@ -17,7 +17,7 @@
     "parser:watch:trace": "nodemon --exec 'npm run parser:trace' -w lib/hmr-spec/hmr-spec-parser.pegjs"
   },
   "author": "rixo <rixo@rixo.fr>",
-  "license": "MIT",
+  "license": "ISC",
   "peerDependencies": {
     "nollup": "^0.7.4",
     "webpack": ">=4.0.0",
