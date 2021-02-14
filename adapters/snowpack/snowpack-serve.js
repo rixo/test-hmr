@@ -1,5 +1,5 @@
 import * as path from 'path'
-import { startServer, createConfiguration } from 'snowpack'
+import relative from 'require-relative'
 
 export default async ({
   root,
@@ -7,6 +7,9 @@ export default async ({
   // reload = false,
   reload = true,
 } = {}) => {
+  const snowpackPath = relative.resolve('snowpack', root)
+  const { startServer, createConfiguration } = await import(snowpackPath)
+
   const configPath = path.resolve(root, 'snowpack.config.js')
 
   const { default: userConfig } = await import(configPath)

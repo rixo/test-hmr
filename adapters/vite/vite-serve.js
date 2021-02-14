@@ -1,5 +1,5 @@
 import * as path from 'path'
-import { createServer } from 'vite'
+import relative from 'require-relative'
 
 export default async ({
   root,
@@ -8,6 +8,9 @@ export default async ({
   // eslint-disable-next-line no-unused-vars
   reload = true,
 } = {}) => {
+  const vitePath = relative.resolve('vite', root)
+  const { createServer } = await import(vitePath)
+
   const server = await createServer({
     configFile: false,
     root: path.resolve(root),

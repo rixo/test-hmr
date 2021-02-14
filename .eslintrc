@@ -2,7 +2,7 @@ extends:
   - '@rixo'
 
 overrides:
-  - files: ["lib/**", "adapters/**", "**/snowpack.config.js"]
+  - files: ["lib/**", "adapters/**", "**/snowpack.config.js", "index.js", "cli.js"]
     env:
       node: true
   - files: ["test/**"]
