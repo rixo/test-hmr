@@ -3,6 +3,11 @@
 const path = require('path')
 const findUp = require('find-up')
 const { run } = require('zoar')
+const relative = require('require-relative')
+
+const cwd = path.dirname(
+  findUp.sync('thc.config.js') || findUp.sync('package.json')
+)
 
 run(
   {
@@ -24,11 +29,9 @@ run(
     },
   },
   {
-    cwd: path.dirname(
-      findUp.sync('thc.config.js') || findUp.sync('package.json')
-    ),
+    cwd,
 
-    zorax: require.resolve('zorax') + ':harness',
+    zorax: relative.resolve('zorax', cwd) + ':harness',
 
     ignore: ['**/node_modules', '**/.git', 'tmp/**'],
 
