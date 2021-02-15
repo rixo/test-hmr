@@ -1,6 +1,6 @@
 {
   "name": "test-hmr",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Test bed for HMR and dev servers",
   "keywords": "hmr test",
   "main": "index.js",
