@@ -1880,10 +1880,10 @@ yocto-queue@^0.1.0:
   resolved "https://registry.yarnpkg.com/yocto-queue/-/yocto-queue-0.1.0.tgz#0294eb3dee05028d31ee1a5fa2c556a6aaf10a1b"
   integrity sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==
 
-zoar@^0.1.0:
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/zoar/-/zoar-0.1.0.tgz#cb5c1023e64a1f460db5a88f176902153d1c0750"
-  integrity sha512-8kJ/TCSfKQOqt65oQc3ynzUISSF5XQlsTlRhLXGvTDdJBrhBVdYzcik5voLy6p/zxAzyV6f0ZoeuB1vnQxUpug==
+zoar@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/zoar/-/zoar-0.2.0.tgz#919c95318f2b23565b7d98bfd73f6908555eb462"
+  integrity sha512-2GhsECMRqEhSuf1JO9+R75R+ZHiwtqNn4eX4JSUgwNKWUv2har7GbemLavVwvYlLbMyvYfp8t5pDQd06Oqc94w==
   dependencies:
     arg "^4.1.2"
     cheap-watch "^1.0.2"

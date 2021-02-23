@@ -31,7 +31,7 @@ run(
   {
     cwd,
 
-    zorax: relative.resolve('zorax', cwd) + ':harness',
+    zorax: relative.resolve('zorax', cwd) + '::harness',
 
     ignore: ['**/node_modules', '**/.git', 'tmp/**'],
 
