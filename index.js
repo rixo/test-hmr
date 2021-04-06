@@ -1,3 +1,5 @@
-const impørt = require('esm')(module)
+/**
+ * Index
+ */
 
-export const { browse, fixture, dev, test, describe } = impørt('./lib/harness')
+export { browse, fixture, dev, test, describe } from './lib/harness.js'

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-const path = require('path')
-const findUp = require('find-up')
-const { run } = require('zoar')
-const relative = require('require-relative')
+import path from 'path'
+import findUp from 'find-up'
+import { run } from 'zoar'
+import relative from 'require-relative'
 
-const cwd = path.dirname(
-  findUp.sync('thc.config.js') || findUp.sync('package.json')
-)
+const thcConfig = findUp.sync('test-hmr.config.js') || findUp.sync('.thcrc.js')
+
+const cwd = path.dirname(thcConfig || findUp.sync('package.json'))
 
 run(
   {
@@ -21,6 +21,8 @@ run(
       ],
       ['-b, --break', 'adds a browser breakpoint after test execution', false],
       ['-c, --console', 'log browser console to terminal', false],
+      ['--cfg [config]', 'use config file', thcConfig],
+      ['--fixtures <dir>', 'fixtures directory'],
     ],
 
     alias: {

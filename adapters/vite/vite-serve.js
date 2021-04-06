@@ -7,9 +7,12 @@ export default async ({
   // TODO would that ever be a need? (doesn't work with non-linked Snowpack)
   // eslint-disable-next-line no-unused-vars
   reload = true,
+  createServer: customCreateServer,
 } = {}) => {
   const vitePath = relative.resolve('vite', root)
-  const { createServer } = await import(vitePath)
+
+  const createServer =
+    customCreateServer || (await import(vitePath)).createServer
 
   const server = await createServer({
     configFile: false,
