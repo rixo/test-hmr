@@ -5,7 +5,7 @@ dependencies:
   playwright: 1.9.1
   port-authority: 1.1.2
   require-relative: 0.8.7
-  zoar: 0.4.0-1
+  zoar: 0.4.0-3
   zorax: 0.0.12
 devDependencies:
   '@rixo/eslint-config': 0.11.0-alpha.0_582479e9f396d14612568708ff9032c1
@@ -2102,7 +2102,7 @@ packages:
       node: '>=10'
     resolution:
       integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==
-  /zoar/0.4.0-1:
+  /zoar/0.4.0-3:
     dependencies:
       arg: 4.1.3
       cheap-watch: 1.0.3
@@ -2116,13 +2116,14 @@ packages:
       picomatch: 2.2.2
       require-relative: 0.8.7
       source-map-support: 0.5.19
+      stack-chain: 2.0.0
       trace: 3.1.1
       zora-node-reporter: github.com/rixo/zora-reporters/002538be1e3fc28bc4bdca8e1bed15b20c8bd2e6
       zora-tap-reporter: 2.0.0
     dev: false
     hasBin: true
     resolution:
-      integrity: sha512-1IUn5ifeZCGpf67rWo1E8blgSA8DWJnCCFuerFQzw/lnyNHUzZeOl7z9UUvVYtBlyixzrc8tFDFiZLBew+e0sA==
+      integrity: sha512-oAbh5TnJ3TPvTic9h2+Xc16CQ/jxsDJqGq3D0v71I8btH3WhJom3B0vCep9ibbd6sHmid5v/hsUrr0SM7BaB+A==
   /zora-tap-reporter/2.0.0:
     dev: false
     resolution:
@@ -2157,5 +2158,5 @@ specifiers:
   require-relative: ^0.8.7
   snowpack: ^3.0.11
   vite: ^2.1.5
-  zoar: ^0.4.0-1
+  zoar: ^0.4.0-3
   zorax: ^0.0.12

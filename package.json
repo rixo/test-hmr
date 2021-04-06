@@ -1,9 +1,8 @@
 {
   "name": "test-hmr",
-  "version": "0.2.3",
+  "version": "0.3.0-0",
   "description": "Test bed for HMR and dev servers",
   "keywords": "hmr test",
-  "type": "module",
   "main": "index.js",
   "bin": {
     "thc": "./cli.js"
@@ -17,7 +16,7 @@
     "playwright": "^1.7.1",
     "port-authority": "^1.1.2",
     "require-relative": "^0.8.7",
-    "zoar": "^0.4.0-1",
+    "zoar": "^0.4.0-3",
     "zorax": "^0.0.12"
   },
   "devDependencies": {
