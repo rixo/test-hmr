@@ -850,9 +850,9 @@ get-stream@^5.1.0:
     pump "^3.0.0"
 
 glob-parent@^5.0.0, glob-parent@^5.1.0:
-  version "5.1.1"
-  resolved "https://registry.yarnpkg.com/glob-parent/-/glob-parent-5.1.1.tgz#b6c1ef417c4e5663ea498f1c45afac6916bbc229"
-  integrity sha512-FnI+VGOpnlGHWZxthPGR+QhR78fuiK0sNLkHQv+bL9fQi57lNNdquIbna/WrfROrolq8GK5Ek6BiMwqL/voRYQ==
+  version "5.1.2"
+  resolved "https://registry.yarnpkg.com/glob-parent/-/glob-parent-5.1.2.tgz#869832c58034fe68a4093c17dc15e8340d8401c4"
+  integrity sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==
   dependencies:
     is-glob "^4.0.1"
 
@@ -1899,8 +1899,9 @@ zoar@^0.2.0:
     zora-node-reporter rixo/zora-reporters#zora-node-reporter-v0.0.1-rixo.3-gitpkg
     zora-tap-reporter "^2.0.0"
 
-"zora-node-reporter@github:rixo/zora-reporters#zora-node-reporter-v0.0.1-rixo.3-gitpkg":
+zora-node-reporter@rixo/zora-reporters#zora-node-reporter-v0.0.1-rixo.3-gitpkg:
   version "0.0.1-rixo.3"
+  uid "002538be1e3fc28bc4bdca8e1bed15b20c8bd2e6"
   resolved "https://codeload.github.com/rixo/zora-reporters/tar.gz/002538be1e3fc28bc4bdca8e1bed15b20c8bd2e6"
 
 zora-tap-reporter@^2.0.0:
