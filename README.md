@@ -1,8 +1,8 @@
 # Snowgun
 
-> Spawning Snowpack projects on-demand for testing purposes.
+> Spawning projects on-demand for HMR testing purposes.
 
-**Status:** work in progress, currently focused on testing Snowpack HMR behaviour.
+**Status:** work in progress, originally focused on testing Snowpack HMR behaviour.
 
 ## Install
 
@@ -74,7 +74,7 @@ Help:
 yarn test --help
 ```
 
-Run test process with `--inspect-brk` (allow debugging Snowpack code):
+Run test process with `--inspect-brk` (allow debugging):
 
 ```bash
 yarn test --inspect-brk
