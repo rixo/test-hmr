@@ -9,11 +9,11 @@
   },
   "author": "rixo <rixo@rixo.fr>",
   "license": "ISC",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/rixo/test-hmr"
-	},
-	"homepage": "https://github.com/rixo/test-hmr",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rixo/test-hmr"
+  },
+  "homepage": "https://github.com/rixo/test-hmr",
   "dependencies": {
     "esm": "^3.2.25",
     "find-up": "^5.0.0",
